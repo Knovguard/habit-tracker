@@ -80,21 +80,25 @@ function dayScore(dateStr, today) {
   return got / want;
 }
 function renderYearMap(today) {
-  const y = today.getFullYear(), jan1 = new Date(y, 0, 1);
-  const lead = (jan1.getDay() + 6) % 7; // Monday-first rows
-  const total = S.isLeap(y) ? 366 : 365;
-  const todayStr = S.ymd(today);
-  let html = "<i style='visibility:hidden'></i>".repeat(lead);
-  for (let i = 0; i < total; i++) {
-    const d = S.addDays(jan1, i), k = S.ymd(d);
-    let cls = "";
-    if (k === todayStr) cls = "today";
-    else if (d < today) { const r = dayScore(k, today); cls = r >= 0.99 ? "p3" : r >= 0.5 ? "p2" : r > 0 ? "p1" : ""; }
-    html += `<i class="${cls}" title="${k}"></i>`;
+  const y = today.getFullYear(), todayStr = S.ymd(today);
+  const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  let html = "";
+  for (let m = 0; m < 12; m++) {
+    const lead = (new Date(y, m, 1).getDay() + 6) % 7;      // Monday-first
+    const n = S.daysInMonth(y, m);
+    const cur = m === today.getMonth() ? " cur" : "";
+    html += `<div class="mo${cur}"><div class="mn">${names[m]}</div><div class="md">`;
+    html += "<i class='x'></i>".repeat(lead);
+    for (let d = 1; d <= n; d++) {
+      const date = new Date(y, m, d), k = S.ymd(date);
+      let cls = "";
+      if (k === todayStr) cls = "today";
+      else if (date < today) { const r = dayScore(k, today); cls = r >= 0.99 ? "p3" : r >= 0.5 ? "p2" : r > 0 ? "p1" : ""; }
+      html += `<i class="${cls}" title="${k}"></i>`;
+    }
+    html += "</div></div>";
   }
-  const map = $("yearmap");
-  map.innerHTML = html;
-  map.style.gridTemplateColumns = `repeat(${Math.ceil((lead + total) / 7)}, 1fr)`;
+  $("yearmap").innerHTML = html;
 }
 function renderDate(today) {
   $("date-weekday").textContent = today.toLocaleDateString(undefined, { weekday: "long" });

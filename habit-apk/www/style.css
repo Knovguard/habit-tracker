@@ -23,13 +23,18 @@ button:active { filter: brightness(1.2); }
 /* ---- top: year map + date ---- */
 .top { display: flex; gap: 12px; align-items: center; background: var(--card);
   border-radius: 16px; padding: 12px; margin-bottom: 14px; }
-#yearmap { flex: 1; display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 1fr);
-  gap: 2px; min-width: 0; }
-#yearmap i { display: block; aspect-ratio: 1; border-radius: 1.5px; background: #262e3a; }
-#yearmap i.p1 { background: #1f5a3a; }
-#yearmap i.p2 { background: #2a8a57; }
-#yearmap i.p3 { background: var(--green); }
-#yearmap i.today { background: var(--red); outline: 2px solid var(--red); outline-offset: 1px;
+#yearmap { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 7px; min-width: 0; }
+.mo { min-width: 0; }
+.mn { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--dim); margin-bottom: 2px; }
+.mo.cur .mn { color: var(--text); }
+.md { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1.5px; }
+.md i { display: block; aspect-ratio: 1; border-radius: 1px; background: #262e3a; }
+.md i.x { background: none; }
+.md i.p1 { background: #1f5a3a; }
+.md i.p2 { background: #2a8a57; }
+.md i.p3 { background: var(--green); }
+.md i.today { background: var(--red); outline: 1.5px solid var(--red); outline-offset: 1px;
   position: relative; z-index: 1; }
 .datebox { text-align: center; min-width: 76px; line-height: 1.1; }
 #date-weekday { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
