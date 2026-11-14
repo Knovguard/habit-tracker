@@ -118,11 +118,9 @@ const Report = (() => {
 
     // Inside the Android app: blob downloads don't work in a WebView, so write the file
     // and open the share sheet (save to Files/Drive, or open in Excel/Sheets).
-    const cap = typeof window !== "undefined" ? window.Capacitor : null;
-    if (cap && cap.isNativePlatform && cap.isNativePlatform()) {
-      const { Filesystem, Share } = cap.Plugins;
-      const saved = await Filesystem.writeFile({ path: filename, data: toBase64(buf), directory: "CACHE" });
-      await Share.share({ title: filename, url: saved.uri, dialogTitle: "Save or open your report" });
+    if (typeof Native !== "undefined" && Native.isNative()) {
+      const saved = await Native.call("Filesystem", "writeFile", { path: filename, data: toBase64(buf), directory: "CACHE" });
+      await Native.call("Share", "share", { title: filename, url: saved.uri, dialogTitle: "Save or open your report" });
       return;
     }
 

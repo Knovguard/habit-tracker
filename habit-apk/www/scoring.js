@@ -85,6 +85,28 @@ const Scoring = (() => {
     return { kind, start, end, rows, overall: avg === null ? null : { pct: avg, grade: gradeFor(avg) } };
   }
 
+  /** Streak of consecutive met periods (days for daily, weeks for weekly, months for monthly habits).
+   *  The current, still-open period never breaks a streak: it only adds to it once it is met. */
+  function streak(habit, log, today) {
+    const created = habit.created ? parse(habit.created) : today;
+    const unit = habit.freq === "day" ? "day" : habit.freq === "week" ? "week" : "month";
+    const periods = [];
+    if (unit === "day") for (let d = created; d <= today; d = addDays(d, 1)) periods.push([d, d]);
+    else if (unit === "week") for (let d = weekStart(created); d <= today; d = addDays(d, 7)) periods.push(weekRange(d));
+    else for (let d = new Date(created.getFullYear(), created.getMonth(), 1); d <= today; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) periods.push(monthRange(d));
+    const met = periods.map(([s, e]) => {
+      let n = 0;
+      for (let d = new Date(s); d <= e && d <= today; d = addDays(d, 1)) n += (log[ymd(d)] || {})[habit.id] || 0;
+      return n >= habit.target;
+    });
+    let best = 0, run = 0;
+    for (const m of met) { run = m ? run + 1 : 0; best = Math.max(best, run); }
+    let cur = 0, i = met.length - 1;
+    if (i >= 0 && !met[i]) i--;                      // current period still open
+    for (; i >= 0 && met[i]; i--) cur++;
+    return { cur, best, unit };
+  }
+
   /** Periods that have at least started, newest first. `from` = first day of data. */
   function listPeriods(kind, from, today) {
     const out = [];
@@ -103,7 +125,7 @@ const Scoring = (() => {
   }
 
   const api = { GRADES, pad, ymd, parse, addDays, daysInMonth, isLeap, dayOfYear, diffDays, weekStart, weekRange,
-    monthRange, yearRange, isoWeek, gradeFor, activeRange, expected, done, buildReport, listPeriods };
+    monthRange, yearRange, isoWeek, gradeFor, activeRange, expected, done, buildReport, listPeriods, streak };
   if (typeof module !== "undefined") module.exports = api;
   return api;
 })();

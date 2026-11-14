@@ -91,10 +91,11 @@ function renderYearMap(today) {
     html += "<i class='x'></i>".repeat(lead);
     for (let d = 1; d <= n; d++) {
       const date = new Date(y, m, d), k = S.ymd(date);
-      let cls = "";
-      if (k === todayStr) cls = "today";
-      else if (date < today) { const r = dayScore(k, today); cls = r >= 0.99 ? "p3" : r >= 0.5 ? "p2" : r > 0 ? "p1" : ""; }
-      html += `<i class="${cls}" title="${k}"></i>`;
+      const weekend = (date.getDay() + 6) % 7 >= 5;          // Saturday, Sunday
+      let cls = weekend ? "we" : "";
+      if (k === todayStr) cls += " today";
+      else if (date < today) { const r = dayScore(k, today); cls += r >= 0.99 ? " p3" : r >= 0.5 ? " p2" : r > 0 ? " p1" : ""; }
+      html += `<i class="${cls.trim()}" title="${k}"></i>`;
     }
     html += "</div></div>";
   }
@@ -125,7 +126,9 @@ function renderHabits(today) {
       <span class="info"><div class="name"></div>
       <div class="sub">${Math.min(count, h.target)}/${h.target} ${h.freq === "day" ? "today" : "this " + f.label}</div></span>`;
     main.querySelector(".name").textContent = h.name;
-    main.onclick = () => openEditor(h);
+    main.onclick = () => { if (suppressClick) { suppressClick = false; return; } openDetail(h); };
+    main.addEventListener("pointerdown", (ev) => startPress(ev, row, state.habits.indexOf(h)));
+    row.addEventListener("contextmenu", (ev) => ev.preventDefault());
     row.appendChild(main);
 
     const checks = document.createElement("div");
@@ -142,12 +145,82 @@ function renderHabits(today) {
   }
 }
 
+/* ---------- long press + drag to reorder ---------- */
+let suppressClick = false;
+function startPress(ev, row, index) {
+  if (ev.button > 0) return;
+  const list = $("habit-list");
+  const rows = [...list.children].filter((el) => el.classList.contains("habit"));
+  if (rows.length < 2) return;                       // nothing to reorder
+  const x0 = ev.clientX, y0 = ev.clientY;
+  let active = false, timer = null, rects = [], step = 0, target = index;
+
+  const blockScroll = (e) => { if (active && e.cancelable) e.preventDefault(); };
+  const activate = () => {
+    active = true; suppressClick = true;
+    if (navigator.vibrate) navigator.vibrate(25);
+    rects = rows.map((r) => r.getBoundingClientRect());
+    step = Math.abs(rects[1].top - rects[0].top);
+    row.classList.add("drag");
+    list.classList.add("dragging");
+  };
+  const drag = (dy) => {
+    row.style.transform = `translateY(${dy}px) scale(1.02)`;
+    const center = rects[index].top + rects[index].height / 2 + dy;
+    let best = Infinity;
+    rects.forEach((r, i) => {
+      const d = Math.abs(center - (r.top + r.height / 2));
+      if (d < best) { best = d; target = i; }
+    });
+    rows.forEach((r, j) => {
+      if (j === index) return;
+      let shift = 0;
+      if (index < target && j > index && j <= target) shift = -step;
+      if (index > target && j < index && j >= target) shift = step;
+      r.style.transform = shift ? `translateY(${shift}px)` : "";
+    });
+  };
+  const onMove = (e) => {
+    const dx = e.clientX - x0, dy = e.clientY - y0;
+    if (!active) { if (Math.abs(dx) > 10 || Math.abs(dy) > 10) cleanup(false); return; }
+    drag(dy);
+  };
+  const cleanup = (commit) => {
+    clearTimeout(timer);
+    document.removeEventListener("pointermove", onMove);
+    document.removeEventListener("pointerup", onUp);
+    document.removeEventListener("pointercancel", onCancel);
+    document.removeEventListener("touchmove", blockScroll);
+    if (!active) return;
+    active = false;
+    setTimeout(() => (suppressClick = false), 400);
+    row.classList.remove("drag");
+    list.classList.remove("dragging");
+    rows.forEach((r) => (r.style.transform = ""));
+    if (commit && target !== index) {
+      const [moved] = state.habits.splice(index, 1);
+      state.habits.splice(target, 0, moved);
+      save();
+    }
+    render();
+  };
+  const onUp = () => cleanup(true);
+  const onCancel = () => cleanup(false);
+
+  document.addEventListener("pointermove", onMove);
+  document.addEventListener("pointerup", onUp);
+  document.addEventListener("pointercancel", onCancel);
+  document.addEventListener("touchmove", blockScroll, { passive: false });
+  timer = setTimeout(activate, 450);
+}
+
 function render() {
   const today = new Date();
   renderDate(today);
   renderYearMap(today);
   renderHabits(today);
   if (typeof renderOutput === "function") renderOutput();
+  if (typeof renderDetail === "function") renderDetail();
 }
 
 document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });

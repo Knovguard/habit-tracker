@@ -3,5 +3,13 @@
   "appName": "Habit Tracker",
   "webDir": "www",
   "backgroundColor": "#0e1330",
-  "android": { "allowMixedContent": false }
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_moon",
+      "iconColor": "#3ddc84"
+    }
+  }
 }

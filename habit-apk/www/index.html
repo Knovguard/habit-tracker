@@ -14,7 +14,10 @@
 <!-- ============ TODAY SCREEN ============ -->
 <main id="screen-today" class="screen active">
   <header class="top">
-    <div id="yearmap" aria-label="Map of the year"></div>
+    <div class="mapwrap">
+      <div id="yearmap" aria-label="Map of the year"></div>
+      <div class="legend"><i class="lg sq"></i>weekday <i class="lg ci"></i>weekend <i class="lg rd"></i>today</div>
+    </div>
     <div class="datebox">
       <div id="date-weekday"></div>
       <div id="date-day"></div>
@@ -24,26 +27,61 @@
   </header>
 
   <section id="habit-list" class="habits"></section>
+  <div class="listhint">Tap a habit for its graphs. Press and hold to reorder.</div>
   <div id="empty-hint" class="empty" hidden>No habits yet. Tap <b>+</b> to add your first one.</div>
 </main>
 
-<!-- ============ OUTPUT PROGRESS SCREEN ============ -->
-<main id="screen-output" class="screen">
-  <h1 class="title">Output Progress</h1>
-  <div class="seg" id="out-tabs">
-    <button data-tab="weeks" class="on">Weekly</button>
-    <button data-tab="months">Monthly</button>
-    <button data-tab="years">Yearly</button>
+<!-- ============ HABIT DETAIL SCREEN ============ -->
+<main id="screen-detail" class="screen">
+  <div class="dhead">
+    <button id="d-back" aria-label="Back">‹</button>
+    <div class="dtitle"><span id="d-badge" class="badge"></span><div><b id="d-name"></b><span id="d-sub"></span></div></div>
+    <button id="d-edit" class="edit">Edit</button>
   </div>
-  <div id="out-list" class="out-list"></div>
-  <button id="btn-export-all" class="wide">Export everything (one workbook)</button>
+  <div class="seg" id="d-tabs">
+    <button data-tab="weeks" class="on">Week</button>
+    <button data-tab="months">Month</button>
+    <button data-tab="years">Year</button>
+  </div>
+  <div class="pager">
+    <button id="d-prev" aria-label="Previous period">‹</button>
+    <div class="pg-title"><b id="d-pname"></b><span id="d-prange"></span></div>
+    <button id="d-next" aria-label="Next period">›</button>
+  </div>
+  <div id="d-pane" class="pane"><div id="d-slide" class="slide"></div></div>
+  <div class="swipe-hint">Swipe left or right to move between periods</div>
+</main>
+
+<!-- ============ PROGRESS SCREEN ============ -->
+<main id="screen-output" class="screen">
+  <h1 class="title">Progress</h1>
+  <div class="seg" id="out-tabs">
+    <button data-tab="weeks" class="on">Week</button>
+    <button data-tab="months">Month</button>
+    <button data-tab="years">Year</button>
+  </div>
+
+  <div class="pager">
+    <button id="pg-prev" aria-label="Previous period">‹</button>
+    <div class="pg-title"><b id="pg-name"></b><span id="pg-range"></span></div>
+    <button id="pg-next" aria-label="Next period">›</button>
+  </div>
+
+  <div id="chart-pane" class="pane"><div id="chart-slide" class="slide"></div></div>
+  <div class="swipe-hint">Swipe left or right to move between periods</div>
+
+  <section class="export">
+    <h3>Output</h3>
+    <button id="btn-export-one" class="wide"></button>
+    <button id="btn-export-all" class="wide alt">Export everything (one Excel workbook)</button>
+  </section>
 </main>
 
 <!-- ============ BOTTOM NAV ============ -->
 <nav class="nav">
   <button id="nav-today" class="on">Today</button>
   <button id="fab" class="fab" aria-label="Add habit">+</button>
-  <button id="nav-output">Output Progress</button>
+  <button id="nav-output">Progress</button>
 </nav>
 
 <!-- ============ ADD / EDIT SHEET ============ -->
@@ -74,6 +112,22 @@
     </label>
     <div id="f-hint" class="hint"></div>
 
+    <div class="switchrow">
+      <span>Reminders</span>
+      <label class="switch"><input id="f-notify" type="checkbox"><span class="knob"></span></label>
+    </div>
+    <div id="f-notif-box" hidden>
+      <div class="field">Notifications per day</div>
+      <div class="stepper">
+        <button id="n-minus" type="button">−</button>
+        <output id="n-count">1</output>
+        <button id="n-plus" type="button">+</button>
+      </div>
+      <div class="field" style="margin-top:12px">At what time?</div>
+      <div id="f-times" class="times"></div>
+      <div class="hint">Reminders are sent by the Android app, every day at these times.</div>
+    </div>
+
     <div class="row">
       <button id="f-delete" class="danger" hidden>Delete</button>
       <span class="grow"></span>
@@ -87,8 +141,10 @@
 
 <script src="exceljs.min.js"></script>
 <script src="scoring.js"></script>
+<script src="native.js"></script>
 <script src="report.js"></script>
 <script src="report-export.js"></script>
+<script src="notify.js"></script>
 <script src="app.js"></script>
 <script src="ui.js"></script>
 </body>
