@@ -309,10 +309,10 @@ function habitBars(rep) {
     const h = r.habit, f = FREQ[h.freq];
     if (r.skipped) {
       const why = h.freq === "month" && rep.kind === "week" ? "scored in month and year" : "not active yet";
-      return `<div class="hb skip"><div class="hn">${esc(h.icon)} ${esc(h.name)}</div><div class="hr">${why}</div><div class="ht"></div></div>`;
+      return `<div class="hb skip pick" data-habit="${esc(h.id)}" role="button" tabindex="0"><div class="hn">${esc(h.icon)} ${esc(h.name)}</div><div class="hr">${why}</div><div class="ht"></div></div>`;
     }
     const pct = Math.round(r.pct);
-    return `<div class="hb"><div class="hn">${esc(h.icon)} ${esc(h.name)}</div>
+    return `<div class="hb pick" data-habit="${esc(h.id)}" role="button" tabindex="0"><div class="hn">${esc(h.icon)} ${esc(h.name)} <span class="go">›</span></div>
       <div class="hr"><span>${r.done}/${Math.round(r.expected * 10) / 10}  ·  ${pct}%</span><span class="grade sm g-${r.grade}">${r.grade}</span></div>
       <div class="ht"><div class="hf" style="width:${Math.max(pct, 2)}%;background:${f.color}"></div></div></div>`;
   }).join("");
@@ -329,12 +329,26 @@ function heatLevel(score) {
   if (score < 1) return 3;
   return 4;
 }
+let progressHabitId = null;      // habit picked on the Progress tab (null = all habits); never saved
+function selHabit() { return progressHabitId ? state.habits.find((h) => h.id === progressHabitId) || null : null; }
+/** Heat value of one day: all habits together, or just the picked habit. */
+function heatFor(key) {
+  const h = selHabit();
+  if (!h) return S.dayHeat(state.habits, state.log, key);
+  if (h.created && h.created > key) return { due: 0, done: 0, score: null };
+  const c = (state.log[key] || {})[h.id] || 0;
+  if (h.freq === "day") { const done = Math.min(c, h.target); return { due: h.target, done, score: done / h.target, count: c }; }
+  return c > 0 ? { due: c, done: c, score: 1, count: c } : { due: 0, done: 0, score: null, count: 0 };
+}
 function describeDay(key) {
   const d = S.parse(key);
   const label = d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
   if (key > S.ymd(new Date())) return `${label}: not yet`;
-  const h = S.dayHeat(state.habits, state.log, key);
+  const h = heatFor(key);
+  const sel = selHabit();
+  if (sel && sel.freq !== "day") return h.score == null ? `${label}: no check-in` : `${label}: done ${h.count}×`;
   if (h.score == null) return `${label}: no goals tracked`;
+  if (sel) return `${label}: ${h.done} of ${h.due} (${Math.round(h.score * 100)}%)`;
   return `${label}: ${h.done} of ${h.due} goals (${Math.round(h.score * 100)}%)`;
 }
 
@@ -346,7 +360,7 @@ function heatGrid(s, e, today, todayKey) {
     const key = S.ymd(d);
     let cls;
     if (key > todayKey) cls = "hc f";
-    else { const l = heatLevel(S.dayHeat(state.habits, state.log, key).score); cls = l < 0 ? "hc n" : `hc l${l}`; }
+    else { const l = heatLevel(heatFor(key).score); cls = l < 0 ? "hc n" : `hc l${l}`; }
     if (key === todayKey) cls += " today";
     html += `<div class="${cls}" data-d="${key}">${d.getDate()}</div>`;
   }
@@ -369,7 +383,7 @@ function heatYear(s, today, todayKey) {
     const c = Math.floor((lead + i) / 7), r = (date.getDay() + 6) % 7;
     let fill;
     if (key > todayKey) fill = HEAT_FUTURE;
-    else { const l = heatLevel(S.dayHeat(state.habits, state.log, key).score); fill = l < 0 ? HEAT_NONE : HEAT[l]; }
+    else { const l = heatLevel(heatFor(key).score); fill = l < 0 ? HEAT_NONE : HEAT[l]; }
     svg += `<rect x="${(left + c * step).toFixed(2)}" y="${(top + r * step).toFixed(2)}" width="${cell.toFixed(2)}" height="${cell.toFixed(2)}" rx="1.2" fill="${fill}" data-d="${key}"${key === todayKey ? ' class="today"' : ""}/>`;
   }
   return svg + "</svg>";
@@ -377,23 +391,36 @@ function heatYear(s, today, todayKey) {
 
 function heatmapHtml(kind, s, e, today) {
   const todayKey = S.ymd(today);
-  let tracked = 0, perfect = 0, sum = 0;
+  const one = selHabit();
+  let tracked = 0, perfect = 0, sum = 0, total = 0;
   for (let d = new Date(s); d <= e && S.ymd(d) <= todayKey; d = S.addDays(d, 1)) {
-    const h = S.dayHeat(state.habits, state.log, S.ymd(d));
+    const h = heatFor(S.ymd(d));
     if (h.score == null) continue;
-    tracked++; sum += h.score; if (h.score === 1) perfect++;
+    tracked++; sum += h.score; total += h.count || 0; if (h.score === 1) perfect++;
   }
-  const line = tracked
-    ? `${tracked} day${tracked === 1 ? "" : "s"} tracked  ·  ${perfect} perfect  ·  average ${Math.round((sum / tracked) * 100)}%`
-    : "Nothing tracked in this period yet.";
+  let line;
+  if (one && one.freq !== "day") {
+    line = tracked ? `${tracked} day${tracked === 1 ? "" : "s"} done  ·  ${total} check-in${total === 1 ? "" : "s"}` : "No check-ins in this period yet.";
+  } else {
+    line = tracked
+      ? `${tracked} day${tracked === 1 ? "" : "s"} tracked  ·  ${perfect} perfect  ·  average ${Math.round((sum / tracked) * 100)}%`
+      : "Nothing tracked in this period yet.";
+  }
+  const note = !one ? "Shade = share of that day's goals you hit. Weekly and monthly sessions count when you do them and never count against the other days."
+    : one.freq === "day" ? "Shade = share of this habit's daily target you hit."
+    : "Bright days are days you did this habit. Rest days stay dark.";
   const legend = `<div class="hm-legend">Less ${HEAT.map((c) => `<i style="background:${c}"></i>`).join("")} More</div>`;
   return `<h4>Heat map</h4>${kind === "year" ? heatYear(s, today, todayKey) : heatGrid(s, e, today, todayKey)}
     ${legend}<div id="hm-readout" class="hm-readout">Tap a day for details</div>
     <div class="hm-line">${line}</div>
-    <div class="hm-note">Shade = share of that day's goals you hit. Weekly and monthly sessions count when you do them and never count against the other days.</div>`;
+    <div class="hm-note">${note}</div>`;
 }
 
+function pickHabit(id) { progressHabitId = id; progress.draw(); }
 $("chart-pane").addEventListener("click", (ev) => {
+  const row = ev.target.closest && ev.target.closest("[data-habit]");
+  if (row) { pickHabit(row.dataset.habit); return; }
+  if (ev.target.closest && ev.target.closest("[data-back]")) { pickHabit(null); return; }
   const t = ev.target.closest && ev.target.closest("[data-d]");
   if (!t) return;
   document.querySelectorAll("#chart-slide .sel").forEach((x) => x.classList.remove("sel"));
@@ -402,24 +429,44 @@ $("chart-pane").addEventListener("click", (ev) => {
   if (r) r.textContent = describeDay(t.dataset.d);
 });
 
+$("chart-pane").addEventListener("keydown", (ev) => {
+  if (ev.key !== "Enter" && ev.key !== " ") return;
+  const row = ev.target.closest && ev.target.closest("[data-habit]");
+  if (row) { ev.preventDefault(); pickHabit(row.dataset.habit); }
+});
+
 let progressView = "graphs";     // never saved: the app always opens on the graphs
 
 const progress = makePager({
   tabs: "out-tabs", name: "pg-name", range: "pg-range", prev: "pg-prev", next: "pg-next",
   pane: "chart-pane", slide: "chart-slide",
-  habits: () => state.habits,
+  habits: () => { const h = selHabit(); return h ? [h] : state.habits; },
   first: firstDataDay,
   onDraw: ({ kind, s }) => {
     $("btn-export-one").textContent = `Export ${periodLabel(kind, s)} to Excel`;
     document.querySelectorAll("#view-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.view === progressView));
   },
   slideHtml: ({ kind, s, e, today, rep }) => {
+    const one = selHabit();
+    if (one) {
+      const row = rep.rows[0], st = S.streak(one, state.log, today);
+      const bar = `<div class="pickbar"><button class="chip" data-back type="button">‹ All habits</button>
+        <span class="pickname"><i style="border-color:${FREQ[one.freq].color}">${esc(one.icon)}</i>${esc(one.name)}</span></div>`;
+      const sum = row.skipped
+        ? `<div class="sum"><div class="grade big g-none">–</div><div><b>Not scored here</b><span>${one.freq === "month" && kind === "week" ? "Monthly habits are scored in the Month and Year views." : "Not active in this period."}</span></div></div>`
+        : `<div class="sum"><div class="grade big g-${row.grade}">${row.grade}</div><div><b>${Math.round(row.pct)}% consistency</b><span>${row.done} of ${Math.round(row.expected * 10) / 10} expected</span></div></div>`;
+      if (progressView === "heat") return bar + sum + heatmapHtml(kind, s, e, today);
+      const stats = `<div class="stats"><div><b>${st.cur}</b><span>${st.unit}${st.cur === 1 ? "" : "s"} streak</span></div>
+        <div><b>${st.best}</b><span>best (${st.unit}s)</span></div>
+        <div><b>${Object.values(state.log).reduce((a, d) => a + (d[one.id] || 0), 0)}</b><span>check-ins</span></div></div>`;
+      return bar + sum + stats + timeChart(kind, s, e, today, [one]);
+    }
     const ov = rep.overall, nScored = rep.rows.filter((r) => !r.skipped).length;
     const head = `<div class="sum"><div class="grade big g-${ov ? ov.grade : "none"}">${ov ? ov.grade : "–"}</div>
        <div><b>${ov ? Math.round(ov.pct) + "% consistency" : "Nothing to score yet"}</b>
        <span>${ov ? `across ${nScored} habit${nScored === 1 ? "" : "s"}` : "Check some habits first"}</span></div></div>`;
     if (progressView === "heat") return head + heatmapHtml(kind, s, e, today);
-    return head + `<h4>By habit</h4>${habitBars(rep)}${timeChart(kind, s, e, today, state.habits)}`;
+    return head + `<h4>By habit</h4><div class="pickhint">Tap a habit to see its own graph and heat map.</div>${habitBars(rep)}${timeChart(kind, s, e, today, state.habits)}`;
   },
 });
 document.querySelectorAll("#view-tabs button").forEach((b) => {
