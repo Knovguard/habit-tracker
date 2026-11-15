@@ -85,6 +85,21 @@ const Scoring = (() => {
     return { kind, start, end, rows, overall: avg === null ? null : { pct: avg, grade: gradeFor(avg) } };
   }
 
+  /** How much of one day's goals were hit. Daily habits: done / target. Weekly and monthly
+   *  habits count (as done) on the days they are checked and never count against the other days.
+   *  score is null when nothing applies to that day. */
+  function dayHeat(habits, log, key) {
+    const rec = log[key] || {};
+    let due = 0, done = 0;
+    for (const h of habits) {
+      if (h.created && h.created > key) continue;
+      const c = rec[h.id] || 0;
+      if (h.freq === "day") { due += h.target; done += Math.min(c, h.target); }
+      else if (c > 0) { due += c; done += c; }
+    }
+    return { due, done, score: due > 0 ? done / due : null };
+  }
+
   /** Streak of consecutive met periods (days for daily, weeks for weekly, months for monthly habits).
    *  The current, still-open period never breaks a streak: it only adds to it once it is met. */
   function streak(habit, log, today) {
@@ -125,7 +140,7 @@ const Scoring = (() => {
   }
 
   const api = { GRADES, pad, ymd, parse, addDays, daysInMonth, isLeap, dayOfYear, diffDays, weekStart, weekRange,
-    monthRange, yearRange, isoWeek, gradeFor, activeRange, expected, done, buildReport, listPeriods, streak };
+    monthRange, yearRange, isoWeek, gradeFor, activeRange, expected, done, buildReport, listPeriods, streak, dayHeat };
   if (typeof module !== "undefined") module.exports = api;
   return api;
 })();

@@ -271,19 +271,112 @@ function habitBars(rep) {
   }).join("");
 }
 
+/* ---------- heat map (month = calendar, year = weeks grid like Anki) ---------- */
+const HEAT = ["#2f3747", "#1b4d33", "#247a4c", "#36b06b", "#86ffbb"];   // missed, low, mid, high, perfect
+const HEAT_NONE = "#1a202a", HEAT_FUTURE = "#151a22";
+function heatLevel(score) {
+  if (score == null) return -1;
+  if (score <= 0) return 0;
+  if (score <= 1 / 3) return 1;
+  if (score <= 2 / 3) return 2;
+  if (score < 1) return 3;
+  return 4;
+}
+function describeDay(key) {
+  const d = S.parse(key);
+  const label = d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  if (key > S.ymd(new Date())) return `${label}: not yet`;
+  const h = S.dayHeat(state.habits, state.log, key);
+  if (h.score == null) return `${label}: no goals tracked`;
+  return `${label}: ${h.done} of ${h.due} goals (${Math.round(h.score * 100)}%)`;
+}
+
+function heatGrid(s, e, today, todayKey) {
+  const lead = (s.getDay() + 6) % 7;                    // Monday-first; a week starts at 0
+  let html = `<div class="hm-month">` + DOW3.map((d) => `<div class="hm-dow">${d[0]}</div>`).join("");
+  html += "<div></div>".repeat(lead);
+  for (let d = new Date(s); d <= e; d = S.addDays(d, 1)) {
+    const key = S.ymd(d);
+    let cls;
+    if (key > todayKey) cls = "hc f";
+    else { const l = heatLevel(S.dayHeat(state.habits, state.log, key).score); cls = l < 0 ? "hc n" : `hc l${l}`; }
+    if (key === todayKey) cls += " today";
+    html += `<div class="${cls}" data-d="${key}">${d.getDate()}</div>`;
+  }
+  return html + "</div>";
+}
+
+function heatYear(s, today, todayKey) {
+  const y = s.getFullYear(), jan1 = new Date(y, 0, 1);
+  const lead = (jan1.getDay() + 6) % 7, total = S.isLeap(y) ? 366 : 365;
+  const cols = Math.ceil((lead + total) / 7);
+  const W = 330, left = 12, top = 14, step = (W - left) / cols, cell = step - 1.3, H = top + 7 * step + 2;
+  let svg = `<svg class="hm-year" viewBox="0 0 ${W} ${H}" role="img" aria-label="Year heat map">`;
+  ["M", "W", "F"].forEach((t, i) => { svg += `<text x="0" y="${top + (i * 2) * step + cell * 0.8}" font-size="7" fill="#8b95a5">${t}</text>`; });
+  for (let m = 0; m < 12; m++) {
+    const c = Math.floor((lead + S.dayOfYear(new Date(y, m, 1)) - 1) / 7);
+    svg += `<text x="${left + c * step}" y="9" font-size="8" fill="#8b95a5">${MON3[m]}</text>`;
+  }
+  for (let i = 0; i < total; i++) {
+    const date = S.addDays(jan1, i), key = S.ymd(date);
+    const c = Math.floor((lead + i) / 7), r = (date.getDay() + 6) % 7;
+    let fill;
+    if (key > todayKey) fill = HEAT_FUTURE;
+    else { const l = heatLevel(S.dayHeat(state.habits, state.log, key).score); fill = l < 0 ? HEAT_NONE : HEAT[l]; }
+    svg += `<rect x="${(left + c * step).toFixed(2)}" y="${(top + r * step).toFixed(2)}" width="${cell.toFixed(2)}" height="${cell.toFixed(2)}" rx="1.2" fill="${fill}" data-d="${key}"${key === todayKey ? ' class="today"' : ""}/>`;
+  }
+  return svg + "</svg>";
+}
+
+function heatmapHtml(kind, s, e, today) {
+  const todayKey = S.ymd(today);
+  let tracked = 0, perfect = 0, sum = 0;
+  for (let d = new Date(s); d <= e && S.ymd(d) <= todayKey; d = S.addDays(d, 1)) {
+    const h = S.dayHeat(state.habits, state.log, S.ymd(d));
+    if (h.score == null) continue;
+    tracked++; sum += h.score; if (h.score === 1) perfect++;
+  }
+  const line = tracked
+    ? `${tracked} day${tracked === 1 ? "" : "s"} tracked  ·  ${perfect} perfect  ·  average ${Math.round((sum / tracked) * 100)}%`
+    : "Nothing tracked in this period yet.";
+  const legend = `<div class="hm-legend">Less ${HEAT.map((c) => `<i style="background:${c}"></i>`).join("")} More</div>`;
+  return `<h4>Heat map</h4>${kind === "year" ? heatYear(s, today, todayKey) : heatGrid(s, e, today, todayKey)}
+    ${legend}<div id="hm-readout" class="hm-readout">Tap a day for details</div>
+    <div class="hm-line">${line}</div>
+    <div class="hm-note">Shade = share of that day's goals you hit. Weekly and monthly sessions count when you do them and never count against the other days.</div>`;
+}
+
+$("chart-pane").addEventListener("click", (ev) => {
+  const t = ev.target.closest && ev.target.closest("[data-d]");
+  if (!t) return;
+  document.querySelectorAll("#chart-slide .sel").forEach((x) => x.classList.remove("sel"));
+  t.classList.add("sel");
+  const r = $("hm-readout");
+  if (r) r.textContent = describeDay(t.dataset.d);
+});
+
+let progressView = "graphs";     // never saved: the app always opens on the graphs
+
 const progress = makePager({
   tabs: "out-tabs", name: "pg-name", range: "pg-range", prev: "pg-prev", next: "pg-next",
   pane: "chart-pane", slide: "chart-slide",
   habits: () => state.habits,
   first: firstDataDay,
-  onDraw: ({ kind, s }) => { $("btn-export-one").textContent = `Export ${periodLabel(kind, s)} to Excel`; },
+  onDraw: ({ kind, s }) => {
+    $("btn-export-one").textContent = `Export ${periodLabel(kind, s)} to Excel`;
+    document.querySelectorAll("#view-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.view === progressView));
+  },
   slideHtml: ({ kind, s, e, today, rep }) => {
     const ov = rep.overall, nScored = rep.rows.filter((r) => !r.skipped).length;
-    return `<div class="sum"><div class="grade big g-${ov ? ov.grade : "none"}">${ov ? ov.grade : "–"}</div>
+    const head = `<div class="sum"><div class="grade big g-${ov ? ov.grade : "none"}">${ov ? ov.grade : "–"}</div>
        <div><b>${ov ? Math.round(ov.pct) + "% consistency" : "Nothing to score yet"}</b>
-       <span>${ov ? `across ${nScored} habit${nScored === 1 ? "" : "s"}` : "Check some habits first"}</span></div></div>
-     <h4>By habit</h4>${habitBars(rep)}${timeChart(kind, s, e, today, state.habits)}`;
+       <span>${ov ? `across ${nScored} habit${nScored === 1 ? "" : "s"}` : "Check some habits first"}</span></div></div>`;
+    if (progressView === "heat") return head + heatmapHtml(kind, s, e, today);
+    return head + `<h4>By habit</h4>${habitBars(rep)}${timeChart(kind, s, e, today, state.habits)}`;
   },
+});
+document.querySelectorAll("#view-tabs button").forEach((b) => {
+  b.onclick = () => { progressView = b.dataset.view; progress.draw(); };
 });
 function renderOutput(anim) { progress.draw(anim); }
 
