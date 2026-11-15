@@ -1,7 +1,7 @@
-const CACHE = "habits-v8";
+const CACHE = "habits-v9";
 const FILES = [
   "./", "./index.html", "./style.css", "./app.js", "./native.js", "./report.js", "./report-export.js", "./ui.js", "./notify.js", "./scoring.js",
-  "./exceljs.min.js", "./manifest.json", "./icons/icon-192.png", "./icons/icon-512.png"
+  "./exceljs.min.js", "./fonts/fraunces-latin-600-normal.woff2", "./fonts/fraunces-latin-700-normal.woff2", "./fonts/figtree-latin-400-normal.woff2", "./fonts/figtree-latin-500-normal.woff2", "./fonts/figtree-latin-600-normal.woff2", "./fonts/figtree-latin-700-normal.woff2", "./manifest.json", "./icons/icon-192.png", "./icons/icon-512.png"
 ];
 
 self.addEventListener("install", (e) => {

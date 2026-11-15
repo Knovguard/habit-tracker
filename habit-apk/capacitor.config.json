@@ -2,7 +2,7 @@
   "appId": "com.cousous.habittracker",
   "appName": "Habit Tracker",
   "webDir": "www",
-  "backgroundColor": "#0e1330",
+  "backgroundColor": "#0a0e24",
   "android": {
     "allowMixedContent": false
   },

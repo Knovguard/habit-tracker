@@ -1,7 +1,7 @@
 /* Editor sheet, swipeable period pager, Progress + habit detail screens, navigation */
 
 const KIND = { weeks: "week", months: "month", years: "year" };
-const GCOL = { S: "#ffd700", A: "#3ddc84", B: "#8ae04a", C: "#ffc83d", D: "#ff9a3d", E: "#ff6a4d", F: "#ff4d4d" };
+const GCOL = { S: "#ffd84a", A: "#4ee38f", B: "#9be85a", C: "#ffc94a", D: "#ff9f4a", E: "#ff7152", F: "#ff5566" };
 const MON3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const DOW3 = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -212,20 +212,20 @@ function timeChart(kind, s, e, today, habits) {
       const label = kind === "week" ? DOW3[(dd.getDay() + 6) % 7]
         : (dd.getDate() === 1 || dd.getDate() % 5 === 0) ? String(dd.getDate()) : "";
       const weekend = (dd.getDay() + 6) % 7 >= 5;
-      bars.push({ label, v, future: dd > today, color: weekend ? "#5aa9ff" : "#3ddc84", txt: kind === "week" && v ? String(v) : "" });
+      bars.push({ label, v, future: dd > today, color: weekend ? "#8ea6ff" : "#4ee38f", txt: kind === "week" && v ? String(v) : "" });
     }
   }
   const W = 320, H = 150, top = 16, bot = 20, side = 6, n = bars.length;
   const max = kind === "year" ? 100 : Math.max(1, ...bars.map((b) => b.v || 0));
   const bw = (W - side * 2) / n, gap = Math.min(6, bw * 0.25), ch = H - top - bot;
   let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}">`;
-  svg += `<line x1="${side}" y1="${H - bot}" x2="${W - side}" y2="${H - bot}" stroke="#2b3340"/>`;
+  svg += `<line x1="${side}" y1="${H - bot}" x2="${W - side}" y2="${H - bot}" stroke="#262f5e"/>`;
   bars.forEach((b, i) => {
     const x = side + i * bw + gap / 2, w = bw - gap, cx = x + w / 2;
-    if (b.future) svg += `<rect x="${x}" y="${H - bot - 2}" width="${w}" height="2" fill="#2b3340"/>`;
+    if (b.future) svg += `<rect x="${x}" y="${H - bot - 2}" width="${w}" height="2" fill="#262f5e"/>`;
     else {
       const h = Math.max(b.v ? (b.v / max) * ch : 0, b.v ? 2 : 1.5), y = H - bot - h;
-      svg += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="${b.v ? b.color : "#2b3340"}"/>`;
+      svg += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="${b.v ? b.color : "#262f5e"}"/>`;
       if (b.txt) svg += `<text x="${cx}" y="${y - 3}" text-anchor="middle">${b.txt}</text>`;
     }
     if (b.label) svg += `<text x="${cx}" y="${H - 6}" text-anchor="middle">${b.label}</text>`;
@@ -319,8 +319,8 @@ function habitBars(rep) {
 }
 
 /* ---------- heat map (month = calendar, year = weeks grid like Anki) ---------- */
-const HEAT = ["#2f3747", "#1b4d33", "#247a4c", "#36b06b", "#86ffbb"];   // missed, low, mid, high, perfect
-const HEAT_NONE = "#1a202a", HEAT_FUTURE = "#151a22";
+const HEAT = ["#262f5e", "#1d5a48", "#238a5c", "#3fc07c", "#a6ffcf"];   // missed, low, mid, high, perfect
+const HEAT_NONE = "#161c44", HEAT_FUTURE = "#11163a";
 function heatLevel(score) {
   if (score == null) return -1;
   if (score <= 0) return 0;
@@ -359,10 +359,10 @@ function heatYear(s, today, todayKey) {
   const cols = Math.ceil((lead + total) / 7);
   const W = 330, left = 12, top = 14, step = (W - left) / cols, cell = step - 1.3, H = top + 7 * step + 2;
   let svg = `<svg class="hm-year" viewBox="0 0 ${W} ${H}" role="img" aria-label="Year heat map">`;
-  ["M", "W", "F"].forEach((t, i) => { svg += `<text x="0" y="${top + (i * 2) * step + cell * 0.8}" font-size="7" fill="#8b95a5">${t}</text>`; });
+  ["M", "W", "F"].forEach((t, i) => { svg += `<text x="0" y="${top + (i * 2) * step + cell * 0.8}" font-size="7" fill="#8e98c4">${t}</text>`; });
   for (let m = 0; m < 12; m++) {
     const c = Math.floor((lead + S.dayOfYear(new Date(y, m, 1)) - 1) / 7);
-    svg += `<text x="${left + c * step}" y="9" font-size="8" fill="#8b95a5">${MON3[m]}</text>`;
+    svg += `<text x="${left + c * step}" y="9" font-size="8" fill="#8e98c4">${MON3[m]}</text>`;
   }
   for (let i = 0; i < total; i++) {
     const date = S.addDays(jan1, i), key = S.ymd(date);

@@ -1,9 +1,9 @@
 /* State + Today screen */
 const S = Scoring;
 const FREQ = {
-  day:   { color: "#3ddc84", label: "day",   word: "Daily",   hint: "Green: something you do one or more times every day." },
-  week:  { color: "#ffc83d", label: "week",  word: "Weekly",  hint: "Yellow: something you do several times a week, like working out." },
-  month: { color: "#ff5a5a", label: "month", word: "Monthly", hint: "Red: something you do a few times a month, like a long stretching session." },
+  day:   { color: "#4ee38f", label: "day",   word: "Daily",   hint: "Green: something you do one or more times every day." },
+  week:  { color: "#ffc94a", label: "week",  word: "Weekly",  hint: "Yellow: something you do several times a week, like working out." },
+  month: { color: "#ff6370", label: "month", word: "Monthly", hint: "Red: something you do a few times a month, like a long stretching session." },
 };
 const LIMITS = { day: [1, 10], week: [1, 6], month: [1, 15] };
 const ICONS = ["📚","💪","🧘","🪥","🏃","💧","🥗","😴","🧹","💊","✍️","🎸","🧠","🚶","🧴","🌅","💻","🎯","🙏","☕","🛏️"];
