@@ -10,7 +10,9 @@ const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
    Add / edit habit
    ===================================================================== */
 let editing = null;           // habit being edited, or null when adding
-const form = { icon: ICONS[0], freq: "day", target: 1, notify: false, times: ["09:00"] };
+const form = { icon: ICONS[0], freq: "day", target: 1, notify: false, times: ["09:00"], items: { week: [], month: [] } };
+const WD_ORDER = [1, 2, 3, 4, 5, 6, 0];   // Monday first
+const reminderCount = () => (form.freq === "day" ? form.times.length : form.items[form.freq].length);
 
 function buildIconGrid() {
   const g = $("f-icons");
@@ -27,13 +29,41 @@ function buildIconGrid() {
 function buildTimes() {
   const box = $("f-times");
   box.innerHTML = "";
-  form.times.forEach((t, i) => {
-    const l = document.createElement("label");
-    l.innerHTML = `<span>Reminder ${i + 1}</span><input type="time" value="${t}">`;
-    l.querySelector("input").oninput = (e) => { if (e.target.value) form.times[i] = e.target.value; };
-    box.appendChild(l);
+  if (form.freq === "day") {
+    form.times.forEach((t, i) => {
+      const l = document.createElement("label");
+      l.innerHTML = `<span>Reminder ${i + 1}</span><input type="time" value="${t}">`;
+      l.querySelector("input").oninput = (e) => { if (e.target.value) form.times[i] = e.target.value; };
+      box.appendChild(l);
+    });
+    return;
+  }
+  const items = form.items[form.freq];
+  items.forEach((x, i) => {
+    const row = document.createElement("div");
+    row.className = "slot";
+    const nth = form.freq === "month"
+      ? `<select class="s-nth">${[1, 2, 3, 4, 5].map((n) => `<option value="${n}"${n === x.nth ? " selected" : ""}>${Notify.NTH_NAMES[n]}</option>`).join("")}</select>`
+      : "";
+    const wd = `<select class="s-wd">${WD_ORDER.map((d) => `<option value="${d}"${d === x.wd ? " selected" : ""}>${Notify.WD_NAMES[d]}</option>`).join("")}</select>`;
+    row.innerHTML = `<span class="s-n">${i + 1}</span>${nth}${wd}<input class="s-time" type="time" value="${x.time}">`;
+    const q = (c) => row.querySelector(c);
+    if (nth) q(".s-nth").onchange = (e) => { x.nth = +e.target.value; };
+    q(".s-wd").onchange = (e) => { x.wd = +e.target.value; };
+    q(".s-time").oninput = (e) => { if (e.target.value) x.time = e.target.value; };
+    box.appendChild(row);
   });
 }
+function ensureItems() {
+  for (const f of ["week", "month"]) {
+    if (!form.items[f].length) form.items[f] = Notify.defaultItems(f, 1);
+  }
+}
+const NOTIF_TEXT = {
+  day:   ["Notifications per day",   "At what time?",           "Reminders are sent by the Android app, every day at these times."],
+  week:  ["Notifications per week",  "On which day and time?",  "Each reminder repeats every week, e.g. every Monday at 10:00."],
+  month: ["Notifications per month", "On which day and time?",  "Pick e.g. the 2nd Monday at 10:00. The app schedules the next 12 months each time you open it."],
+};
 function syncForm() {
   const [lo, hi] = LIMITS[form.freq];
   form.target = Math.max(lo, Math.min(hi, form.target));
@@ -43,7 +73,8 @@ function syncForm() {
   document.querySelectorAll("#f-freq button").forEach((b) => b.classList.toggle("on", b.dataset.freq === form.freq));
   $("f-notify").checked = form.notify;
   $("f-notif-box").hidden = !form.notify;
-  $("n-count").textContent = form.times.length;
+  $("n-count").textContent = reminderCount();
+  [$("n-label").textContent, $("n-when").textContent, $("n-hint").textContent] = NOTIF_TEXT[form.freq];
   buildTimes();
 }
 function openEditor(habit) {
@@ -56,6 +87,9 @@ function openEditor(habit) {
   const n = habit && habit.notify;
   form.notify = !!(n && n.on);
   form.times = n && n.times && n.times.length ? n.times.slice(0, 6) : Notify.defaultTimes(1);
+  form.items = { week: [], month: [] };
+  if (n && habit.freq !== "day") form.items[habit.freq] = Notify.cleanItems(n.items, habit.freq);
+  ensureItems();
   $("f-delete").hidden = !habit;
   buildIconGrid();
   syncForm();
@@ -65,7 +99,7 @@ function openEditor(habit) {
 function closeEditor() { $("sheet").hidden = true; editing = null; }
 
 document.querySelectorAll("#f-freq button").forEach((b) => {
-  b.onclick = () => { form.freq = b.dataset.freq; syncForm(); };
+  b.onclick = () => { form.freq = b.dataset.freq; ensureItems(); syncForm(); };
 });
 $("f-minus").onclick = () => { form.target--; syncForm(); };
 $("f-plus").onclick = () => { form.target++; syncForm(); };
@@ -80,20 +114,33 @@ $("f-notify").onchange = async (e) => {
   syncForm();
 };
 function setCount(n) {
-  n = Math.max(1, Math.min(6, n));
-  const old = form.times.length;
-  if (n === old) return;
-  const untouched = JSON.stringify(form.times) === JSON.stringify(Notify.defaultTimes(old));
-  if (untouched) form.times = Notify.defaultTimes(n);
-  else if (n < old) form.times = form.times.slice(0, n);
-  else {
-    const spare = Notify.defaultTimes(n).find((t) => !form.times.includes(t));
-    form.times.push(spare || "12:00");
+  const max = Notify.MAX[form.freq];
+  n = Math.max(1, Math.min(max, n));
+  if (form.freq === "day") {
+    const old = form.times.length;
+    if (n === old) return;
+    const untouched = JSON.stringify(form.times) === JSON.stringify(Notify.defaultTimes(old));
+    if (untouched) form.times = Notify.defaultTimes(n);
+    else if (n < old) form.times = form.times.slice(0, n);
+    else {
+      const spare = Notify.defaultTimes(n).find((t) => !form.times.includes(t));
+      form.times.push(spare || "12:00");
+    }
+  } else {
+    const items = form.items[form.freq];
+    if (n < items.length) items.length = n;
+    else {
+      const fresh = Notify.defaultItems(form.freq, n);
+      const key = (x) => `${x.nth || 0}-${x.wd}-${x.time}`;
+      while (items.length < n) {
+        items.push(fresh.find((x) => !items.some((y) => key(y) === key(x))) || fresh[items.length]);
+      }
+    }
   }
   syncForm();
 }
-$("n-minus").onclick = () => setCount(form.times.length - 1);
-$("n-plus").onclick = () => setCount(form.times.length + 1);
+$("n-minus").onclick = () => setCount(reminderCount() - 1);
+$("n-plus").onclick = () => setCount(reminderCount() + 1);
 
 $("f-cancel").onclick = closeEditor;
 $("sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") closeEditor(); });
@@ -102,7 +149,7 @@ $("fab").onclick = () => { showScreen("today"); openEditor(null); };
 $("f-save").onclick = () => {
   const name = $("f-name").value.trim();
   if (!name) { toast("Give your habit a name"); $("f-name").focus(); return; }
-  const notify = { on: form.notify, times: form.times.slice() };
+  const notify = { on: form.notify, times: form.times.slice(), items: form.freq === "day" ? [] : form.items[form.freq].map((x) => ({ ...x })) };
   if (editing) {
     Object.assign(editing, { name, icon: form.icon, freq: form.freq, target: form.target, notify });
   } else {
@@ -435,7 +482,7 @@ function renderDetail() {
   $("d-badge").textContent = h.icon;
   $("d-badge").style.setProperty("--c", f.color);
   $("d-name").textContent = h.name;
-  $("d-sub").textContent = `${h.target}× per ${f.label}` + (h.notify && h.notify.on ? `  ·  ${h.notify.times.length} reminder${h.notify.times.length === 1 ? "" : "s"}` : "");
+  $("d-sub").textContent = `${h.target}× per ${f.label}` + (Notify.count(h) ? `  ·  ${Notify.count(h)} reminder${Notify.count(h) === 1 ? "" : "s"}` : "");
   detail.draw();
 }
 function openDetail(h) {
@@ -497,7 +544,11 @@ function parseBackup(text) {
         freq: h.freq,
         target: clamp(Math.round(Number(h.target)) || 1, LIMITS[h.freq][0], LIMITS[h.freq][1]),
         created: DATE_RE.test(h.created) ? h.created : S.ymd(new Date()),
-        notify: { on: !!(h.notify && h.notify.on) && times.length > 0, times: times.length ? times : Notify.defaultTimes(1) },
+        notify: (() => {
+          const items = h.freq === "day" ? [] : Notify.cleanItems(h.notify && h.notify.items, h.freq);
+          const has = h.freq === "day" ? times.length > 0 : items.length > 0;
+          return { on: !!(h.notify && h.notify.on) && has, times: times.length ? times : Notify.defaultTimes(1), items };
+        })(),
       };
     });
   const ids = new Set(habits.map((h) => h.id));

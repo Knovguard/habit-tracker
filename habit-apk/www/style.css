@@ -239,3 +239,11 @@ input[type=text] { display: block; width: 100%; margin-top: 6px; padding: 12px; 
 
 .seg.view { margin: 0 0 10px; }
 .seg.view button { font-size: 14px; padding: 8px; }
+
+.slot { display: flex; align-items: center; gap: 6px; }
+.slot .s-n { width: 18px; color: var(--muted, #8b95a7); font-size: 13px; text-align: center; flex: none; }
+.slot select, .slot .s-time { font-size: 14px; padding: 8px 6px; color: var(--text); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 10px; min-width: 0; color-scheme: dark; }
+.slot select { flex: 1 1 0; }
+.slot .s-nth { flex: 0 0 64px; }
+.slot .s-time { flex: 0 0 122px; padding: 8px 6px; }

@@ -136,15 +136,15 @@
       <label class="switch"><input id="f-notify" type="checkbox"><span class="knob"></span></label>
     </div>
     <div id="f-notif-box" hidden>
-      <div class="field">Notifications per day</div>
+      <div class="field" id="n-label">Notifications per day</div>
       <div class="stepper">
         <button id="n-minus" type="button">−</button>
         <output id="n-count">1</output>
         <button id="n-plus" type="button">+</button>
       </div>
-      <div class="field" style="margin-top:12px">At what time?</div>
+      <div class="field" id="n-when" style="margin-top:12px">At what time?</div>
       <div id="f-times" class="times"></div>
-      <div class="hint">Reminders are sent by the Android app, every day at these times.</div>
+      <div class="hint" id="n-hint">Reminders are sent by the Android app, every day at these times.</div>
     </div>
 
     <div class="row">

@@ -1,4 +1,4 @@
-const CACHE = "habits-v7";
+const CACHE = "habits-v8";
 const FILES = [
   "./", "./index.html", "./style.css", "./app.js", "./native.js", "./report.js", "./report-export.js", "./ui.js", "./notify.js", "./scoring.js",
   "./exceljs.min.js", "./manifest.json", "./icons/icon-192.png", "./icons/icon-512.png"
