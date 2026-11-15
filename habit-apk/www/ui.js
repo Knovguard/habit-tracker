@@ -355,6 +355,104 @@ $("d-back").onclick = () => showScreen("today");
 $("d-edit").onclick = () => { if (detailHabit) openEditor(detailHabit); };
 
 /* =====================================================================
+   Eject (save everything to a file) and Insert (restore from that file)
+   ===================================================================== */
+const BACKUP_APP = "habit-tracker";
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function backupJson() {
+  return JSON.stringify({ app: BACKUP_APP, version: 1, exportedAt: new Date().toISOString(), habits: state.habits, log: state.log }, null, 1);
+}
+function textToBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+async function eject() {
+  const name = `Habit Tracker backup ${S.ymd(new Date())}.json`;
+  const json = backupJson();
+  if (Native.isNative()) {
+    // Android: write the file, then open the share sheet so it can be saved outside the app (Files, Drive...)
+    const saved = await Native.call("Filesystem", "writeFile", { path: name, data: textToBase64(json), directory: "CACHE" });
+    await Native.call("Share", "share", { title: name, url: saved.uri, dialogTitle: "Save your backup somewhere safe" });
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/** Validate and clean a backup file's text. Throws an Error with a readable message. */
+function parseBackup(text) {
+  let d;
+  try { d = JSON.parse(text); } catch (e) { throw new Error("That file is not a Habit Tracker backup."); }
+  if (!d || d.app !== BACKUP_APP || !Array.isArray(d.habits) || !d.log || typeof d.log !== "object") {
+    throw new Error("That file is not a Habit Tracker backup.");
+  }
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  const habits = d.habits
+    .filter((h) => h && typeof h.id === "string" && h.id && typeof h.name === "string" && h.name.trim() && FREQ[h.freq])
+    .map((h) => {
+      const times = h.notify && Array.isArray(h.notify.times) ? h.notify.times.filter((t) => /^\d{1,2}:\d{2}$/.test(t)).slice(0, 6) : [];
+      return {
+        id: h.id,
+        name: h.name.trim().slice(0, 30),
+        icon: typeof h.icon === "string" && h.icon ? h.icon : ICONS[0],
+        freq: h.freq,
+        target: clamp(Math.round(Number(h.target)) || 1, LIMITS[h.freq][0], LIMITS[h.freq][1]),
+        created: DATE_RE.test(h.created) ? h.created : S.ymd(new Date()),
+        notify: { on: !!(h.notify && h.notify.on) && times.length > 0, times: times.length ? times : Notify.defaultTimes(1) },
+      };
+    });
+  const ids = new Set(habits.map((h) => h.id));
+  const log = {};
+  let checkins = 0;
+  for (const [day, rec] of Object.entries(d.log)) {
+    if (!DATE_RE.test(day) || !rec || typeof rec !== "object") continue;
+    const out = {};
+    for (const [id, n] of Object.entries(rec)) {
+      const v = Math.round(Number(n));
+      if (ids.has(id) && v > 0) { out[id] = Math.min(v, 50); checkins += out[id]; }
+    }
+    if (Object.keys(out).length) log[day] = out;
+  }
+  return { habits, log, checkins, exportedAt: typeof d.exportedAt === "string" ? d.exportedAt.slice(0, 10) : null };
+}
+
+async function insertFile(file) {
+  try {
+    const b = parseBackup(await file.text());
+    const when = b.exportedAt ? ` saved on ${b.exportedAt}` : "";
+    if (!confirm(`Restore ${b.habits.length} habit${b.habits.length === 1 ? "" : "s"} and ${b.checkins} check-ins from this backup${when}?\n\nThis replaces what is in the app right now.`)) return;
+    state.habits = b.habits;
+    state.log = b.log;
+    save();
+    detailHabit = null;
+    showScreen("today");
+    render();
+    Notify.sync(state.habits);
+    toast("Backup restored");
+  } catch (err) {
+    console.error(err);
+    toast(err && err.message ? err.message : "Could not read that file");
+  }
+}
+
+$("btn-eject").onclick = async () => {
+  try { await eject(); toast("Backup ready: save it somewhere safe"); }
+  catch (err) { console.error(err); toast("Eject failed"); }
+};
+$("btn-insert").onclick = () => $("f-insert").click();
+$("f-insert").onchange = (e) => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = "";                       // lets the same file be picked again later
+  if (f) insertFile(f);
+};
+
+/* =====================================================================
    Navigation
    ===================================================================== */
 function showScreen(name) {

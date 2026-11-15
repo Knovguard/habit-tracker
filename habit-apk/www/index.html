@@ -75,6 +75,20 @@
     <button id="btn-export-one" class="wide"></button>
     <button id="btn-export-all" class="wide alt">Export everything (one Excel workbook)</button>
   </section>
+
+  <section class="data">
+    <h3>Backup</h3>
+    <button id="btn-eject" class="eject">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3 3.5 14h17z"/><rect x="3.5" y="17" width="17" height="3.5" rx="1"/></svg>
+      <span><b>EJECT</b><small>Save all your data to a file</small></span>
+    </button>
+    <button id="btn-insert" class="insert">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><rect x="7.5" y="9" width="9" height="13" rx="2"/><path d="M9.5 9V2.5h5V9"/><path d="M11 5.5h.01M13 5.5h.01"/></svg>
+      <span><b>Insert backup</b><small>Restore from an eject file</small></span>
+    </button>
+    <input id="f-insert" type="file" hidden>
+    <div class="hint">Eject before you uninstall or reinstall the app, and keep the file somewhere safe (Files or Drive). After reinstalling, Insert it to carry on where you stopped.</div>
+  </section>
 </main>
 
 <!-- ============ BOTTOM NAV ============ -->
