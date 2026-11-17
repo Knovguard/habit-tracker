@@ -192,6 +192,12 @@ function periodSub(kind, s, e) {
   return `${s.toLocaleDateString(undefined, o)} to ${e.toLocaleDateString(undefined, o)}`;
 }
 
+/** Shown while the period still contains today: today is not scored until it is over. */
+function pendingNote(e, now) {
+  const nowKey = S.ymd(now);
+  return S.ymd(e) >= nowKey ? `<div class="pending"><span>🌙</span> Today isn't counted until the day is over. It joins your score tomorrow.</div>` : "";
+}
+
 /** Bar chart. Week/month: check-ins per day. Year: consistency per month. */
 function timeChart(kind, s, e, today, habits) {
   const bars = [];
@@ -247,7 +253,8 @@ function makePager(cfg) {
     const list = periods();
     if (!list.length) { slide.innerHTML = ""; return; }
     idx = Math.max(0, Math.min(idx, list.length - 1));
-    const kind = KIND[tab], today = new Date(), [s, e] = list[idx];
+    // Today is still being logged, so scores only count days up to yesterday.
+    const now = new Date(), today = S.addDays(now, -1), kind = KIND[tab], [s, e] = list[idx];
     const rep = S.buildReport(cfg.habits(), state.log, kind, s, e, today);
 
     document.querySelectorAll(`#${cfg.tabs} button`).forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
@@ -257,7 +264,7 @@ function makePager(cfg) {
     el(cfg.next).disabled = idx <= 0;
     if (cfg.onDraw) cfg.onDraw({ kind, s, e });
 
-    slide.innerHTML = cfg.slideHtml({ kind, s, e, today, rep });
+    slide.innerHTML = cfg.slideHtml({ kind, s, e, today, now, rep });
     slide.classList.remove("enter-l", "enter-r");
     if (anim) { void slide.offsetWidth; slide.classList.add("enter-" + anim); }
   }
@@ -343,7 +350,9 @@ function heatFor(key) {
 function describeDay(key) {
   const d = S.parse(key);
   const label = d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
-  if (key > S.ymd(new Date())) return `${label}: not yet`;
+  const nowKey = S.ymd(new Date());
+  if (key > nowKey) return `${label}: not yet`;
+  if (key === nowKey) return `${label}: today, counted once the day is over`;
   const h = heatFor(key);
   const sel = selHabit();
   if (sel && sel.freq !== "day") return h.score == null ? `${label}: no check-in` : `${label}: done ${h.count}×`;
@@ -353,6 +362,7 @@ function describeDay(key) {
 }
 
 function heatGrid(s, e, today, todayKey) {
+  const nowKey = S.ymd(new Date());
   const lead = (s.getDay() + 6) % 7;                    // Monday-first; a week starts at 0
   let html = `<div class="hm-month">` + DOW3.map((d) => `<div class="hm-dow">${d[0]}</div>`).join("");
   html += "<div></div>".repeat(lead);
@@ -361,13 +371,14 @@ function heatGrid(s, e, today, todayKey) {
     let cls;
     if (key > todayKey) cls = "hc f";
     else { const l = heatLevel(heatFor(key).score); cls = l < 0 ? "hc n" : `hc l${l}`; }
-    if (key === todayKey) cls += " today";
+    if (key === nowKey) cls += " today";
     html += `<div class="${cls}" data-d="${key}">${d.getDate()}</div>`;
   }
   return html + "</div>";
 }
 
 function heatYear(s, today, todayKey) {
+  const nowKey = S.ymd(new Date());
   const y = s.getFullYear(), jan1 = new Date(y, 0, 1);
   const lead = (jan1.getDay() + 6) % 7, total = S.isLeap(y) ? 366 : 365;
   const cols = Math.ceil((lead + total) / 7);
@@ -384,7 +395,7 @@ function heatYear(s, today, todayKey) {
     let fill;
     if (key > todayKey) fill = HEAT_FUTURE;
     else { const l = heatLevel(heatFor(key).score); fill = l < 0 ? HEAT_NONE : HEAT[l]; }
-    svg += `<rect x="${(left + c * step).toFixed(2)}" y="${(top + r * step).toFixed(2)}" width="${cell.toFixed(2)}" height="${cell.toFixed(2)}" rx="1.2" fill="${fill}" data-d="${key}"${key === todayKey ? ' class="today"' : ""}/>`;
+    svg += `<rect x="${(left + c * step).toFixed(2)}" y="${(top + r * step).toFixed(2)}" width="${cell.toFixed(2)}" height="${cell.toFixed(2)}" rx="1.2" fill="${fill}" data-d="${key}"${key === nowKey ? ' class="today"' : ""}/>`;
   }
   return svg + "</svg>";
 }
@@ -446,27 +457,28 @@ const progress = makePager({
     $("btn-export-one").textContent = `Export ${periodLabel(kind, s)} to Excel`;
     document.querySelectorAll("#view-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.view === progressView));
   },
-  slideHtml: ({ kind, s, e, today, rep }) => {
+  slideHtml: ({ kind, s, e, today, now, rep }) => {
     const one = selHabit();
+    const wait = pendingNote(e, now);
     if (one) {
-      const row = rep.rows[0], st = S.streak(one, state.log, today);
+      const row = rep.rows[0], st = S.streak(one, state.log, now);
       const bar = `<div class="pickbar"><button class="chip" data-back type="button">‹ All habits</button>
         <span class="pickname"><i style="border-color:${FREQ[one.freq].color}">${esc(one.icon)}</i>${esc(one.name)}</span></div>`;
       const sum = row.skipped
         ? `<div class="sum"><div class="grade big g-none">–</div><div><b>Not scored here</b><span>${one.freq === "month" && kind === "week" ? "Monthly habits are scored in the Month and Year views." : "Not active in this period."}</span></div></div>`
         : `<div class="sum"><div class="grade big g-${row.grade}">${row.grade}</div><div><b>${Math.round(row.pct)}% consistency</b><span>${row.done} of ${Math.round(row.expected * 10) / 10} expected</span></div></div>`;
-      if (progressView === "heat") return bar + sum + heatmapHtml(kind, s, e, today);
+      if (progressView === "heat") return bar + sum + wait + heatmapHtml(kind, s, e, today);
       const stats = `<div class="stats"><div><b>${st.cur}</b><span>${st.unit}${st.cur === 1 ? "" : "s"} streak</span></div>
         <div><b>${st.best}</b><span>best (${st.unit}s)</span></div>
         <div><b>${Object.values(state.log).reduce((a, d) => a + (d[one.id] || 0), 0)}</b><span>check-ins</span></div></div>`;
-      return bar + sum + stats + timeChart(kind, s, e, today, [one]);
+      return bar + sum + wait + stats + timeChart(kind, s, e, today, [one]);
     }
     const ov = rep.overall, nScored = rep.rows.filter((r) => !r.skipped).length;
     const head = `<div class="sum"><div class="grade big g-${ov ? ov.grade : "none"}">${ov ? ov.grade : "–"}</div>
        <div><b>${ov ? Math.round(ov.pct) + "% consistency" : "Nothing to score yet"}</b>
        <span>${ov ? `across ${nScored} habit${nScored === 1 ? "" : "s"}` : "Check some habits first"}</span></div></div>`;
-    if (progressView === "heat") return head + heatmapHtml(kind, s, e, today);
-    return head + `<h4>By habit</h4><div class="pickhint">Tap a habit to see its own graph and heat map.</div>${habitBars(rep)}${timeChart(kind, s, e, today, state.habits)}`;
+    if (progressView === "heat") return head + wait + heatmapHtml(kind, s, e, today);
+    return head + wait + `<h4>By habit</h4><div class="pickhint">Tap a habit to see its own graph and heat map.</div>${habitBars(rep)}${timeChart(kind, s, e, today, state.habits)}`;
   },
 });
 document.querySelectorAll("#view-tabs button").forEach((b) => {
@@ -502,9 +514,9 @@ const detail = makePager({
   pane: "d-pane", slide: "d-slide",
   habits: () => [detailHabit],
   first: () => S.parse(detailHabit.created),
-  slideHtml: ({ kind, s, e, today, rep }) => {
+  slideHtml: ({ kind, s, e, today, now, rep }) => {
     const h = detailHabit, row = rep.rows[0];
-    const st = S.streak(h, state.log, today);
+    const st = S.streak(h, state.log, now);
     const total = Object.values(state.log).reduce((a, d) => a + (d[h.id] || 0), 0);
     let sum;
     if (row.skipped) {
@@ -518,7 +530,7 @@ const detail = makePager({
       <div><b>${st.cur}</b><span>${st.unit}${st.cur === 1 ? "" : "s"} streak</span></div>
       <div><b>${st.best}</b><span>best (${st.unit}s)</span></div>
       <div><b>${total}</b><span>check-ins</span></div></div>`;
-    return sum + stats + timeChart(kind, s, e, today, [h]);
+    return sum + pendingNote(e, now) + stats + timeChart(kind, s, e, today, [h]);
   },
 });
 

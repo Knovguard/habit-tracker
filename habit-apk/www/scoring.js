@@ -34,7 +34,8 @@ const Scoring = (() => {
   function activeRange(habit, start, end, today) {
     const created = habit.created ? parse(habit.created) : start;
     const s = created > start ? created : start;
-    const e = end > today ? today : end;
+    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate());   // ignore the time of day
+    const e = end > day ? day : end;
     return s > e ? null : [s, e];
   }
 

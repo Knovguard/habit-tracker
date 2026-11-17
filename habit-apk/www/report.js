@@ -67,8 +67,9 @@ const ReportSheet = (() => {
     ws.getColumn(1).width = 30;
     for (let c = 2; c <= lastCol; c++) ws.getColumn(c).width = c === lastCol ? Math.max(L.w, 8) : L.w;
 
-    const rep = S.buildReport(habits, log, kind, start, end, today);
-    const inProgress = end > today;
+    const upTo = S.addDays(today, -1);               // today is still being logged, so scores stop at yesterday
+    const rep = S.buildReport(habits, log, kind, start, end, upTo);
+    const inProgress = end > upTo;
 
     /* ---- title ---- */
     ws.getRow(1).height = 38;
@@ -76,7 +77,7 @@ const ReportSheet = (() => {
       { size: 20, bold: true, color: WHITE, fill: NAVY, border: false });
     ws.getRow(2).height = 22;
     const sub = `${rangeText(kind, start, end)}   |   Generated ${dFull(today)}` +
-      (inProgress ? "   |   In progress, scored up to today" : "");
+      (inProgress ? "   |   In progress, scored up to yesterday (today counts once it is over)" : "");
     put(ws, 2, 1, lastCol, sub, { size: 11, color: "FF374151", fill: PALE, border: false });
 
     if (opts.indexSheet) {
@@ -153,7 +154,7 @@ const ReportSheet = (() => {
       if (kind === "year") {
         for (let m = 0; m < 12; m++) {
           const [ms, me] = S.monthRange(new Date(start.getFullYear(), m, 1));
-          const row = S.buildReport([h], log, "month", ms, me, today).rows[0];
+          const row = S.buildReport([h], log, "month", ms, me, upTo).rows[0];
           if (row.skipped) put(ws, r, 2 + m, 1, "–", { fill: PALE, color: MID });
           else put(ws, r, 2 + m, 1, `${row.grade} ${Math.round(row.pct)}%`, { fill: GRADE_FILL[row.grade], size: 10, bold: true });
         }
@@ -166,7 +167,7 @@ const ReportSheet = (() => {
           if (i >= days.length) { put(ws, r, 2 + i, 1, "", { fill: MID }); continue; }
           const d = days[i], k = S.ymd(d), c = (log[k] || {})[h.id] || 0;
           total += c;
-          const before = h.created && k < h.created, future = d > today;
+          const before = h.created && k < h.created, future = d > upTo;
           if (c > 0) put(ws, r, 2 + i, 1, c > 1 ? c : "✓", { fill: FREQ_HARD[h.freq], bold: true });
           else put(ws, r, 2 + i, 1, "", { fill: before || future ? "FFE5E7EB" : undefined });
         }

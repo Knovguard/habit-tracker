@@ -335,6 +335,10 @@ body.ghost::after { content: ""; position: fixed; inset: 0; pointer-events: none
 .md i.gday { outline: 1.5px dashed #dbe5ff; outline-offset: 1px; position: relative; z-index: 1; }
 .ghost .listhint { display: none; }
 
+/* ---- today is not scored yet ---- */
+.pending { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; padding: 9px 12px; border-radius: 12px;
+  background: rgba(239, 230, 198, .07); border: 1px dashed var(--line); font-size: 12.5px; color: var(--dim); line-height: 1.35; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
