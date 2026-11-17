@@ -23,8 +23,15 @@
       <div id="date-day"></div>
       <div id="date-month"></div>
       <div id="date-doy"></div>
+      <button id="ghost-btn" class="ghostbtn" type="button" aria-pressed="false" aria-label="See yesterday" title="See yesterday">👻</button>
     </div>
   </header>
+
+  <div id="ghost-banner" class="ghostbanner" hidden>
+    <span class="gh" aria-hidden="true">👻</span>
+    <div class="gt"><b>Yesterday</b><span id="ghost-date"></span><small>Check-ins you change here are saved to yesterday.</small></div>
+    <button id="ghost-back" type="button">Back to today</button>
+  </div>
 
   <section id="habit-list" class="habits"></section>
   <div class="listhint">Tap a habit for its graphs. Press and hold to reorder.</div>

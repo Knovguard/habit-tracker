@@ -652,6 +652,7 @@ function showScreen(name) {
   $("screen-output").classList.toggle("active", name === "output");
   $("nav-today").classList.toggle("on", name === "today" || name === "detail");
   $("nav-output").classList.toggle("on", name === "output");
+  if (name !== "today" && ghost) { ghost = false; render(); }     // leaving Today always returns to the real today
   if (name === "output") renderOutput();
   window.scrollTo(0, 0);
 }

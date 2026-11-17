@@ -57,6 +57,7 @@ function adjust(h, delta, today) {
   };
   const tk = S.ymd(today);
   if (delta > 0) {
+    if (h.created && h.created > tk) h.created = tk;     // checked off for a day before it was added
     set(tk, ((state.log[tk] || {})[h.id] || 0) + 1);
   } else {
     // remove the most recent check inside the current period
@@ -79,7 +80,7 @@ function dayScore(dateStr, today) {
   }
   return got / want;
 }
-function renderYearMap(today) {
+function renderYearMap(today, ghostKey) {
   const y = today.getFullYear(), todayStr = S.ymd(today);
   const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   let html = "";
@@ -95,6 +96,7 @@ function renderYearMap(today) {
       let cls = weekend ? "we" : "";
       if (k === todayStr) cls += " today";
       else if (date < today) { const r = dayScore(k, today); cls += r >= 0.99 ? " p3" : r >= 0.5 ? " p2" : r > 0 ? " p1" : ""; }
+      if (ghostKey && k === ghostKey) cls += " gday";
       html += `<i class="${cls.trim()}" title="${k}"></i>`;
     }
     html += "</div></div>";
@@ -115,7 +117,7 @@ function renderHabits(today) {
   $("empty-hint").hidden = state.habits.length > 0;
   for (const h of state.habits) {
     const f = FREQ[h.freq], [s, e] = periodRange(h, today);
-    const count = countIn(h, s, e);
+    const count = countIn(h, s, e > today ? today : e);    // "as of" the day being shown
     const row = document.createElement("div");
     row.className = "habit";
     row.style.setProperty("--c", f.color);
@@ -214,11 +216,27 @@ function startPress(ev, row, index) {
   timer = setTimeout(activate, 450);
 }
 
+/* ---------- yesterday ("ghost") mode: look at and fix yesterday's check-ins ---------- */
+let ghost = false;                                   // never saved: the app always opens on today
+function renderGhost(now, day) {
+  const on = ghost && $("screen-today").classList.contains("active");
+  document.body.classList.toggle("ghost", on);
+  $("ghost-btn").setAttribute("aria-pressed", String(ghost));
+  $("ghost-btn").setAttribute("aria-label", ghost ? "Back to today" : "See yesterday");
+  $("ghost-banner").hidden = !ghost;
+  if (ghost) $("ghost-date").textContent = day.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+}
+function setGhost(v) { ghost = v; window.scrollTo(0, 0); render(); }
+$("ghost-btn").onclick = () => setGhost(!ghost);
+$("ghost-back").onclick = () => setGhost(false);
+
 function render() {
-  const today = new Date();
+  const now = new Date();
+  const today = ghost ? S.addDays(now, -1) : now;     // the day the Today screen is showing
   renderDate(today);
-  renderYearMap(today);
+  renderYearMap(now, ghost ? S.ymd(today) : null);
   renderHabits(today);
+  renderGhost(now, today);
   if (typeof renderOutput === "function") renderOutput();
   if (typeof renderDetail === "function") renderDetail();
 }
