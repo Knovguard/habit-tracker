@@ -339,16 +339,22 @@ body.ghost::after { content: ""; position: fixed; inset: 0; pointer-events: none
 .pending { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; padding: 9px 12px; border-radius: 12px;
   background: rgba(239, 230, 198, .07); border: 1px dashed var(--line); font-size: 12.5px; color: var(--dim); line-height: 1.35; }
 
-/* ---- habits with an end date: flat, crisp red outline, no glow ---- */
-.habit.limited { background: #12183a; border: 2px solid #e5484d; padding-bottom: 16px; }
-.habit.limited .badge { box-shadow: none; background: none; }
-.habit.limited .check.on { box-shadow: none; }
-.habit .cd { display: inline-block; margin-top: 5px; padding: 2px 8px; border: 1.5px solid #e5484d; border-radius: 7px;
-  font-size: 12px; font-weight: 650; color: #ff8f96; letter-spacing: .01em; }
+/* ---- habits with an end date: flat (no glow), Greek key (fret) pattern in faint red.
+        On the last day the pattern turns redder and the card gets a bold red frame. ---- */
+.habit.limited { --key: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 20 20'><path d='M0 19H20M19 19V1H5V15H15V5H9V11' fill='none' stroke='%23ff4d57' stroke-opacity='0.2' stroke-width='1.2' stroke-linecap='square' stroke-linejoin='miter'/></svg>"); border: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, rgba(18, 24, 58, .86) 0%, rgba(18, 24, 58, .7) 50%, rgba(18, 24, 58, .25) 100%),
+    var(--key) 0 0 / 24px 24px,
+    #12183a; }
+.habit.limited .badge { box-shadow: none; background: #12183a; }
+.habit.limited .check { background: #12183a; }
+.habit.limited .check.on { background: var(--c); box-shadow: none; }
+.habit .cd { display: inline-block; margin-top: 5px; padding: 2px 8px; border-radius: 7px; background: rgba(229, 72, 77, .16);
+  font-size: 12px; font-weight: 650; color: #ff8f96; }
+.habit.limited.lastday { --key: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 20 20'><path d='M0 19H20M19 19V1H5V15H15V5H9V11' fill='none' stroke='%23ff4d57' stroke-opacity='0.5' stroke-width='1.2' stroke-linecap='square' stroke-linejoin='miter'/></svg>"); border: 2px solid #e5484d; }
 .habit .cd.last { background: #e5484d; color: #190a12; }
-.dlbar { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: rgba(229, 72, 77, .22); }
-.dlbar i { display: block; height: 100%; background: #e5484d; }
-.ghost .habit.limited { border: 2px dashed rgba(229, 72, 77, .75); }
+.ghost .habit.limited { border: 1px dashed rgba(229, 72, 77, .5); }
+.ghost .habit.limited.lastday { border: 2px dashed rgba(229, 72, 77, .85); }
 
 /* ---- end date in the editor (quiet on purpose) ---- */
 .endwrap { margin: 4px 0 8px; }

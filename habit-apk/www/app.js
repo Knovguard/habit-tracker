@@ -150,9 +150,9 @@ function renderHabits(today) {
     const f = FREQ[h.freq], [s, e] = periodRange(h, today);
     const count = countIn(h, s, e > today ? today : e);    // "as of" the day being shown
     const row = document.createElement("div");
-    row.className = "habit" + (h.deadline ? " limited" : "");
-    row.style.setProperty("--c", f.color);
     const left = h.deadline ? daysLeft(h, new Date()) : null;
+    row.className = "habit" + (h.deadline ? " limited" : "") + (left !== null && left <= 0 ? " lastday" : "");
+    row.style.setProperty("--c", f.color);
 
     const main = document.createElement("button");
     main.className = "main";
@@ -176,12 +176,6 @@ function renderHabits(today) {
       checks.appendChild(c);
     }
     row.appendChild(checks);
-    if (left !== null) {
-      const bar = document.createElement("div");
-      bar.className = "dlbar";
-      bar.innerHTML = `<i style="width:${Math.round(leftShare(h, new Date()) * 100)}%"></i>`;
-      row.appendChild(bar);
-    }
     list.appendChild(row);
   }
 }
