@@ -18,7 +18,7 @@ const Notify = (() => {
 
   const hash = (s) => { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h) % 200000; };
   // habit x reminder (up to 10) x month (up to 12): stays under the 32-bit limit
-  const notifId = (habitId, i, m = 0) => (hash(habitId) * 10 + i) * 16 + m;
+  const notifId = (habitId, i, m = 0) => (hash(habitId) * 10 + i) * 128 + m;      // m < 128
 
   /** Evenly spread default times between 09:00 and 21:00. */
   function defaultTimes(n) {
@@ -87,6 +87,32 @@ const Notify = (() => {
     return `Keep going: ${h.target}× this month.`;
   }
 
+  /** Habits with an end date get explicit one-off reminders up to (and including) that day,
+   *  so nothing keeps firing after they expire even if the app isn't opened. */
+  function buildUntilDeadline(h, common, now) {
+    const out = [];
+    const [y, m, d] = h.deadline.split("-").map(Number);
+    const last = new Date(y, m - 1, d, 23, 59, 59);
+    const at = (day, t) => { const [hh, mm] = t.split(":").map(Number); const x = new Date(day); x.setHours(hh, mm, 0, 0); return x; };
+    const push = (i, k, when) => { if (when > now && k < 128) out.push({ ...common, id: notifId(h.id, i, k), schedule: { at: when.toISOString(), allowWhileIdle: true } }); };
+    const items = h.freq === "day" ? [] : cleanItems(h.notify.items, h.freq);
+    const times = h.freq === "day" ? (h.notify.times || []).slice(0, 10).filter(validTime).map((t) => t.padStart(5, "0")) : [];
+    const counters = {};
+    const days = Math.min(120, Math.floor((last - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5) + 1);
+    for (let n = 0; n < days; n++) {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + n);
+      if (h.freq === "day") {
+        times.forEach((t, i) => push(i, n, at(day, t)));
+      } else {
+        items.forEach((x, i) => {
+          const hit = h.freq === "week" ? day.getDay() === x.wd : nthWeekday(day.getFullYear(), day.getMonth(), x.wd, x.nth).getDate() === day.getDate() && day.getDay() === x.wd;
+          if (hit) { counters[i] = (counters[i] || 0) + 1; push(i, counters[i] - 1, at(day, x.time)); }
+        });
+      }
+    }
+    return out;
+  }
+
   /** Build the list of notifications for the habits (pure, testable). */
   function build(habits, now = new Date()) {
     const list = [];
@@ -95,7 +121,9 @@ const Notify = (() => {
       const title = `${h.icon} ${h.name}`;
       const common = { title, body: body(h), smallIcon: "ic_stat_moon" };
 
-      if (h.freq === "day") {
+      if (h.deadline && /^\d{4}-\d{2}-\d{2}$/.test(h.deadline)) {
+        list.push(...buildUntilDeadline(h, common, now));
+      } else if (h.freq === "day") {
         (Array.isArray(h.notify.times) ? h.notify.times : []).slice(0, 10).forEach((t, i) => {
           const m = /^(\d{1,2}):(\d{2})$/.exec(t || "");
           if (!m) return;

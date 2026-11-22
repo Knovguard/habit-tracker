@@ -35,7 +35,9 @@ const Scoring = (() => {
     const created = habit.created ? parse(habit.created) : start;
     const s = created > start ? created : start;
     const day = new Date(today.getFullYear(), today.getMonth(), today.getDate());   // ignore the time of day
-    const e = end > day ? day : end;
+    let last = end;
+    if (habit.deadline) { const dl = parse(habit.deadline); if (dl < last) last = dl; }   // habits with an end date stop counting there
+    const e = last > day ? day : last;
     return s > e ? null : [s, e];
   }
 

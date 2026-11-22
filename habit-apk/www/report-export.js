@@ -24,7 +24,13 @@ const Report = (() => {
   }
 
   /** Everything in one workbook, with a navigable "Output Progress" tab first. */
-  function makeAll(habits, log, today, firstDay) {
+  /** Live habits plus ended habits (archive) that were running at some point in [s,e]. */
+  const habitsFor = (habits, archive, s, e) => {
+    const a = S.ymd(s), b = S.ymd(e);
+    return habits.concat((archive || []).filter((h) => h.created <= b && h.deadline >= a));
+  };
+
+  function makeAll(habits, log, today, firstDay, archive) {
     const wb = newBook();
     const idx = wb.addWorksheet(INDEX, {
       views: [{ showGridLines: false }],
@@ -41,7 +47,7 @@ const Report = (() => {
     for (const [title, kind] of sections) {
       const items = [];
       for (const [s, e] of S.listPeriods(kind, firstDay, today)) {
-        const { report } = RS.addSheet(wb, habits, log, kind, s, e, today, { indexSheet: INDEX });
+        const { report } = RS.addSheet(wb, habitsFor(habits, archive, s, e), log, kind, s, e, today, { indexSheet: INDEX });
         items.push({ kind, s, e, report });
       }
       built.push({ title, kind, items });
@@ -135,11 +141,11 @@ const Report = (() => {
   }
 
   const api = {
-    makeOne, makeAll, INDEX,
+    makeOne, makeAll, habitsFor, INDEX,
     exportOne: (kind, s, e, habits, log, today) =>
       download(makeOne(kind, s, e, habits, log, today), `Habit Progress - ${fileSafe(RS.label(kind, s))}.xlsx`),
-    exportAll: (habits, log, today, firstDay) =>
-      download(makeAll(habits, log, today, firstDay), `Habit Progress - Output Progress ${today.getFullYear()}.xlsx`),
+    exportAll: (habits, log, today, firstDay, archive) =>
+      download(makeAll(habits, log, today, firstDay, archive), `Habit Progress - Output Progress ${today.getFullYear()}.xlsx`),
   };
   if (typeof module !== "undefined") module.exports = api;
   return api;

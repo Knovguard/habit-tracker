@@ -45,6 +45,7 @@
     <div class="dtitle"><span id="d-badge" class="badge"></span><div><b id="d-name"></b><span id="d-sub"></span></div></div>
     <button id="d-edit" class="edit">Edit</button>
   </div>
+  <div id="d-rem" class="remcard"></div>
   <div class="seg" id="d-tabs">
     <button data-tab="weeks" class="on">Week</button>
     <button data-tab="months">Month</button>
@@ -152,6 +153,21 @@
       <div class="field" id="n-when" style="margin-top:12px">At what time?</div>
       <div id="f-times" class="times"></div>
       <div class="hint" id="n-hint">Reminders are sent by the Android app, every day at these times.</div>
+    </div>
+
+    <div class="endwrap">
+      <button id="f-end-add" class="linkbtn" type="button">Add an end date</button>
+      <div id="f-end-box" hidden>
+        <div class="field">Last day</div>
+        <input id="f-end" type="date">
+        <div class="chips" id="f-end-chips">
+          <button type="button" data-days="7">1 week</button>
+          <button type="button" data-days="14">2 weeks</button>
+          <button type="button" data-days="30">1 month</button>
+        </div>
+        <div id="f-end-hint" class="hint"></div>
+        <button id="f-end-remove" class="linkbtn" type="button">Remove the end date</button>
+      </div>
     </div>
 
     <div class="row">

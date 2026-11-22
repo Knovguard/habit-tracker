@@ -14,7 +14,7 @@ const state = load();
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && Array.isArray(s.habits)) return { habits: s.habits, log: s.log || {} };
+    if (s && Array.isArray(s.habits)) return { habits: s.habits, log: s.log || {}, archive: Array.isArray(s.archive) ? s.archive : [] };
   } catch (e) {}
   const t = S.ymd(new Date());
   return {
@@ -25,8 +25,39 @@ function load() {
       { id: uid(), name: "Big stretching", icon: "🧘", freq: "month", target: 2, created: t },
     ],
     log: {},
+    archive: [],        // habits whose end date has passed: hidden from the app, still included in Excel reports
   };
 }
+/* ---------- habits with an end date ---------- */
+const DAY_MS = 864e5;
+const midnight = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+/** Whole days from today to the habit's last day (0 = today is the last day). */
+function daysLeft(h, now) { return Math.round((S.parse(h.deadline) - midnight(now)) / DAY_MS); }
+function leftText(n) {
+  if (n <= 0) return "Last day";
+  if (n === 1) return "1 day left";
+  if (n >= 28 && n % 7 === 0) return `${n / 7} weeks left`;
+  return `${n} days left`;
+}
+/** Fraction of the countdown still to go (1 = just started, 0 = last day). */
+function leftShare(h, now) {
+  const start = S.parse(h.dlStart || h.created || S.ymd(now));
+  const span = Math.round((S.parse(h.deadline) - start) / DAY_MS);
+  return span <= 0 ? 0 : Math.max(0, Math.min(1, daysLeft(h, now) / span));
+}
+/** Habits whose last day was yesterday or earlier leave the app. Their check-ins are kept and the habit is
+ *  archived, so Excel reports for the periods it was tracked still include it. */
+function purgeExpired(now) {
+  const t = S.ymd(now);
+  const gone = state.habits.filter((h) => h.deadline && h.deadline < t);
+  if (!gone.length) return [];
+  const ids = new Set(gone.map((h) => h.id));
+  state.habits = state.habits.filter((h) => !ids.has(h.id));
+  state.archive = (state.archive || []).concat(gone);
+  save();
+  return gone;
+}
+
 function uid() { return Math.random().toString(36).slice(2, 9); }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
 const $ = (id) => document.getElementById(id);
@@ -119,14 +150,16 @@ function renderHabits(today) {
     const f = FREQ[h.freq], [s, e] = periodRange(h, today);
     const count = countIn(h, s, e > today ? today : e);    // "as of" the day being shown
     const row = document.createElement("div");
-    row.className = "habit";
+    row.className = "habit" + (h.deadline ? " limited" : "");
     row.style.setProperty("--c", f.color);
+    const left = h.deadline ? daysLeft(h, new Date()) : null;
 
     const main = document.createElement("button");
     main.className = "main";
     main.innerHTML = `<span class="badge">${h.icon}</span>
       <span class="info"><div class="name"></div>
-      <div class="sub">${Math.min(count, h.target)}/${h.target} ${h.freq === "day" ? "today" : "this " + f.label}</div></span>`;
+      <div class="sub">${Math.min(count, h.target)}/${h.target} ${h.freq === "day" ? "today" : "this " + f.label}</div>
+      ${left === null ? "" : `<div class="cd${left <= 0 ? " last" : ""}">${leftText(left)}</div>`}</span>`;
     main.querySelector(".name").textContent = h.name;
     main.onclick = () => { if (suppressClick) { suppressClick = false; return; } openDetail(h); };
     main.addEventListener("pointerdown", (ev) => startPress(ev, row, state.habits.indexOf(h)));
@@ -143,6 +176,12 @@ function renderHabits(today) {
       checks.appendChild(c);
     }
     row.appendChild(checks);
+    if (left !== null) {
+      const bar = document.createElement("div");
+      bar.className = "dlbar";
+      bar.innerHTML = `<i style="width:${Math.round(leftShare(h, new Date()) * 100)}%"></i>`;
+      row.appendChild(bar);
+    }
     list.appendChild(row);
   }
 }
@@ -232,6 +271,12 @@ $("ghost-back").onclick = () => setGhost(false);
 
 function render() {
   const now = new Date();
+  const gone = purgeExpired(now);
+  if (gone.length) {
+    toast(gone.length === 1 ? `"${gone[0].name}" has ended. It stays in your Excel reports.` : `${gone.length} habits have ended. They stay in your Excel reports.`);
+    Notify.sync(state.habits);
+    if (typeof detailHabit !== "undefined" && detailHabit && !state.habits.includes(detailHabit)) { detailHabit = null; showScreen("today"); }
+  }
   const today = ghost ? S.addDays(now, -1) : now;     // the day the Today screen is showing
   renderDate(today);
   renderYearMap(now, ghost ? S.ymd(today) : null);
@@ -241,5 +286,8 @@ function render() {
   if (typeof renderDetail === "function") renderDetail();
 }
 
+// the app can stay open past midnight: notice the new day and refresh (this also removes expired habits)
+let lastDay = S.ymd(new Date());
+setInterval(() => { const d = S.ymd(new Date()); if (d !== lastDay) { lastDay = d; render(); } }, 30000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

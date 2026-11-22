@@ -10,7 +10,8 @@ const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
    Add / edit habit
    ===================================================================== */
 let editing = null;           // habit being edited, or null when adding
-const form = { icon: ICONS[0], freq: "day", target: 1, notify: false, times: ["09:00"], items: { week: [], month: [] } };
+const form = { icon: ICONS[0], freq: "day", target: 1, notify: false, times: ["09:00"], items: { week: [], month: [] },
+  endOpen: false, deadline: null };
 const WD_ORDER = [1, 2, 3, 4, 5, 6, 0];   // Monday first
 const reminderCount = () => (form.freq === "day" ? form.times.length : form.items[form.freq].length);
 
@@ -76,6 +77,15 @@ function syncForm() {
   $("n-count").textContent = reminderCount();
   [$("n-label").textContent, $("n-when").textContent, $("n-hint").textContent] = NOTIF_TEXT[form.freq];
   buildTimes();
+  // end date (kept low-key: just a small link until it is used)
+  $("f-end-add").hidden = form.endOpen;
+  $("f-end-box").hidden = !form.endOpen;
+  $("f-end").value = form.deadline || "";
+  $("f-end").min = S.ymd(new Date());
+  const left = form.deadline ? Math.round((S.parse(form.deadline) - midnight(new Date())) / DAY_MS) : null;
+  $("f-end-hint").textContent = left === null ? "Pick the last day."
+    : left < 0 ? "That date has already passed."
+    : `${left + 1} day${left === 0 ? "" : "s"} in total, ending ${S.parse(form.deadline).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}. It counts down on Today, leaves Today the day after, and stays in your Excel reports.`;
 }
 function openEditor(habit) {
   editing = habit || null;
@@ -90,6 +100,8 @@ function openEditor(habit) {
   form.items = { week: [], month: [] };
   if (n && habit.freq !== "day") form.items[habit.freq] = Notify.cleanItems(n.items, habit.freq);
   ensureItems();
+  form.deadline = habit && habit.deadline ? habit.deadline : null;
+  form.endOpen = !!form.deadline;
   $("f-delete").hidden = !habit;
   buildIconGrid();
   syncForm();
@@ -142,6 +154,13 @@ function setCount(n) {
 $("n-minus").onclick = () => setCount(reminderCount() - 1);
 $("n-plus").onclick = () => setCount(reminderCount() + 1);
 
+$("f-end-add").onclick = () => { form.endOpen = true; form.deadline = S.ymd(S.addDays(new Date(), 6)); syncForm(); };
+$("f-end-remove").onclick = () => { form.endOpen = false; form.deadline = null; syncForm(); };
+$("f-end").onchange = (e) => { form.deadline = e.target.value || null; syncForm(); };
+document.querySelectorAll("#f-end-chips button").forEach((b) => {
+  b.onclick = () => { form.deadline = S.ymd(S.addDays(new Date(), +b.dataset.days - 1)); syncForm(); };   // today counts as day 1
+});
+
 $("f-cancel").onclick = closeEditor;
 $("sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") closeEditor(); });
 $("fab").onclick = () => { showScreen("today"); openEditor(null); };
@@ -150,10 +169,17 @@ $("f-save").onclick = () => {
   const name = $("f-name").value.trim();
   if (!name) { toast("Give your habit a name"); $("f-name").focus(); return; }
   const notify = { on: form.notify, times: form.times.slice(), items: form.freq === "day" ? [] : form.items[form.freq].map((x) => ({ ...x })) };
+  const todayKey = S.ymd(new Date());
+  if (form.endOpen) {
+    if (!form.deadline) { toast("Pick the last day, or remove the end date"); return; }
+    if (form.deadline < todayKey) { toast("The last day can't be in the past"); return; }
+  }
+  const end = form.endOpen ? { deadline: form.deadline, dlStart: editing && editing.deadline === form.deadline && editing.dlStart ? editing.dlStart : todayKey } : {};
   if (editing) {
-    Object.assign(editing, { name, icon: form.icon, freq: form.freq, target: form.target, notify });
+    delete editing.deadline; delete editing.dlStart;
+    Object.assign(editing, { name, icon: form.icon, freq: form.freq, target: form.target, notify }, end);
   } else {
-    state.habits.push({ id: uid(), name, icon: form.icon, freq: form.freq, target: form.target, notify, created: S.ymd(new Date()) });
+    state.habits.push({ id: uid(), name, icon: form.icon, freq: form.freq, target: form.target, notify, created: todayKey, ...end });
   }
   save(); closeEditor(); render(); Notify.sync(state.habits);
 };
@@ -490,7 +516,7 @@ async function exportPeriod(kind, s, e) {
   if (!state.habits.length) { toast("Add a habit first"); return; }
   try {
     toast("Building spreadsheet…");
-    await Report.exportOne(kind, s, e, state.habits, state.log, new Date());
+    await Report.exportOne(kind, s, e, Report.habitsFor(state.habits, state.archive, s, e), state.log, new Date());
     toast("Report ready");
   } catch (err) { console.error(err); toast("Export failed"); }
 }
@@ -499,7 +525,7 @@ $("btn-export-all").onclick = async () => {
   if (!state.habits.length) { toast("Add a habit first"); return; }
   try {
     toast("Building workbook…");
-    await Report.exportAll(state.habits, state.log, new Date(), firstDataDay());
+    await Report.exportAll(state.habits, state.log, new Date(), firstDataDay(), state.archive);
     toast("Report ready");
   } catch (err) { console.error(err); toast("Export failed"); }
 };
@@ -534,6 +560,26 @@ const detail = makePager({
   },
 });
 
+/** The "when" of a habit, spelled out: times for daily, weekdays for weekly, nth weekday for monthly. */
+function reminderCard(h) {
+  const rows = [];
+  if (h.deadline) {
+    const left = daysLeft(h, new Date());
+    rows.push(`<div class="remrow"><span class="rl">Ends</span><div class="remchips"><span class="rc end">${esc(S.parse(h.deadline).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }))}  ·  ${leftText(left)}</span></div></div>`);
+  }
+  let chips;
+  if (!h.notify || !h.notify.on || !Notify.count(h)) chips = `<span class="rc off">No reminders</span>`;
+  else if (h.freq === "day") {
+    chips = [...h.notify.times].sort().map((t) => `<span class="rc">${esc(t.padStart(5, "0"))}</span>`).join("");
+  } else {
+    const items = Notify.cleanItems(h.notify.items, h.freq).sort((a, b) => ((a.nth || 0) - (b.nth || 0)) || (((a.wd + 6) % 7) - ((b.wd + 6) % 7)) || a.time.localeCompare(b.time));
+    chips = items.map((x) => `<span class="rc">${h.freq === "month" ? `${Notify.NTH_NAMES[x.nth]} ` : "Every "}${Notify.WD_NAMES[x.wd]}${h.freq === "month" ? " of the month" : ""}, ${esc(x.time)}</span>`).join("");
+  }
+  const lbl = h.freq === "day" ? "Reminders every day at" : h.freq === "week" ? "Reminders every week on" : "Reminders each month on";
+  rows.push(`<div class="remrow"><span class="rl">${!h.notify || !h.notify.on ? "Reminders" : lbl}</span><div class="remchips">${chips}</div></div>`);
+  return rows.join("");
+}
+
 function renderDetail() {
   if (!detailHabit || !$("screen-detail").classList.contains("active")) return;
   if (!state.habits.includes(detailHabit)) return;
@@ -542,6 +588,7 @@ function renderDetail() {
   $("d-badge").style.setProperty("--c", f.color);
   $("d-name").textContent = h.name;
   $("d-sub").textContent = `${h.target}× per ${f.label}` + (Notify.count(h) ? `  ·  ${Notify.count(h)} reminder${Notify.count(h) === 1 ? "" : "s"}` : "");
+  $("d-rem").innerHTML = reminderCard(h);
   detail.draw();
 }
 function openDetail(h) {
@@ -560,7 +607,7 @@ const BACKUP_APP = "habit-tracker";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function backupJson() {
-  return JSON.stringify({ app: BACKUP_APP, version: 1, exportedAt: new Date().toISOString(), habits: state.habits, log: state.log }, null, 1);
+  return JSON.stringify({ app: BACKUP_APP, version: 2, exportedAt: new Date().toISOString(), habits: state.habits, archive: state.archive || [], log: state.log }, null, 1);
 }
 function textToBase64(text) {
   const bytes = new TextEncoder().encode(text);
@@ -592,7 +639,7 @@ function parseBackup(text) {
     throw new Error("That file is not a Habit Tracker backup.");
   }
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
-  const habits = d.habits
+  const cleanList = (list) => list
     .filter((h) => h && typeof h.id === "string" && h.id && typeof h.name === "string" && h.name.trim() && FREQ[h.freq])
     .map((h) => {
       const times = h.notify && Array.isArray(h.notify.times) ? h.notify.times.filter((t) => /^\d{1,2}:\d{2}$/.test(t)).slice(0, 6) : [];
@@ -603,6 +650,7 @@ function parseBackup(text) {
         freq: h.freq,
         target: clamp(Math.round(Number(h.target)) || 1, LIMITS[h.freq][0], LIMITS[h.freq][1]),
         created: DATE_RE.test(h.created) ? h.created : S.ymd(new Date()),
+        ...(DATE_RE.test(h.deadline) ? { deadline: h.deadline, dlStart: DATE_RE.test(h.dlStart) ? h.dlStart : (DATE_RE.test(h.created) ? h.created : S.ymd(new Date())) } : {}),
         notify: (() => {
           const items = h.freq === "day" ? [] : Notify.cleanItems(h.notify && h.notify.items, h.freq);
           const has = h.freq === "day" ? times.length > 0 : items.length > 0;
@@ -610,7 +658,9 @@ function parseBackup(text) {
         })(),
       };
     });
-  const ids = new Set(habits.map((h) => h.id));
+  const habits = cleanList(d.habits);
+  const archive = cleanList(Array.isArray(d.archive) ? d.archive : []).filter((h) => h.deadline);   // ended habits
+  const ids = new Set(habits.concat(archive).map((h) => h.id));
   const log = {};
   let checkins = 0;
   for (const [day, rec] of Object.entries(d.log)) {
@@ -622,7 +672,7 @@ function parseBackup(text) {
     }
     if (Object.keys(out).length) log[day] = out;
   }
-  return { habits, log, checkins, exportedAt: typeof d.exportedAt === "string" ? d.exportedAt.slice(0, 10) : null };
+  return { habits, archive, log, checkins, exportedAt: typeof d.exportedAt === "string" ? d.exportedAt.slice(0, 10) : null };
 }
 
 async function insertFile(file) {
@@ -631,6 +681,7 @@ async function insertFile(file) {
     const when = b.exportedAt ? ` saved on ${b.exportedAt}` : "";
     if (!confirm(`Restore ${b.habits.length} habit${b.habits.length === 1 ? "" : "s"} and ${b.checkins} check-ins from this backup${when}?\n\nThis replaces what is in the app right now.`)) return;
     state.habits = b.habits;
+    state.archive = b.archive;
     state.log = b.log;
     save();
     detailHabit = null;

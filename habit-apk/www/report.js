@@ -56,6 +56,9 @@ const ReportSheet = (() => {
     return c;
   }
 
+  /** Habit name for the first column; habits with an end date say when they run until. */
+  const habitLabel = (h) => `${h.icon}  ${h.name}` + (h.deadline ? `  (until ${S.parse(h.deadline).toLocaleDateString("en-GB", { day: "numeric", month: "short" })})` : "");
+
   /** Add a report worksheet. opts: { indexSheet?: string } adds a "back to index" link. */
   function addSheet(wb, habits, log, kind, start, end, today, opts = {}) {
     const L = LAYOUT[kind];
@@ -64,7 +67,7 @@ const ReportSheet = (() => {
       views: [{ showGridLines: false }],
       properties: { tabColor: { argb: kind === "year" ? "FF3B82F6" : kind === "month" ? "FF8B5CF6" : "FF14B8A6" } },
     });
-    ws.getColumn(1).width = 30;
+    ws.getColumn(1).width = 38;
     for (let c = 2; c <= lastCol; c++) ws.getColumn(c).width = c === lastCol ? Math.max(L.w, 8) : L.w;
 
     const upTo = S.addDays(today, -1);               // today is still being logged, so scores stop at yesterday
@@ -113,7 +116,7 @@ const ReportSheet = (() => {
     for (const row of rep.rows) {
       r++; ws.getRow(r).height = 22;
       const h = row.habit;
-      put(ws, r, 1, 1, `${h.icon}  ${h.name}`, { align: "left", indent: 1, bold: true, fill: FREQ_SOFT[h.freq] });
+      put(ws, r, 1, 1, habitLabel(h), { align: "left", indent: 1, bold: true, fill: FREQ_SOFT[h.freq] });
       const per = h.freq === "day" ? "day" : h.freq === "week" ? "week" : "month";
       const vals = row.skipped
         ? [FREQ_WORD[h.freq], `${h.target}× / ${per}`, "–", "–", row.habit.freq === "month" ? "monthly" : "not active", "–"]
@@ -150,7 +153,7 @@ const ReportSheet = (() => {
 
     for (const h of habits) {
       r++; ws.getRow(r).height = 22;
-      put(ws, r, 1, 1, `${h.icon}  ${h.name}`, { align: "left", indent: 1, bold: true, fill: FREQ_SOFT[h.freq] });
+      put(ws, r, 1, 1, habitLabel(h), { align: "left", indent: 1, bold: true, fill: FREQ_SOFT[h.freq] });
       if (kind === "year") {
         for (let m = 0; m < 12; m++) {
           const [ms, me] = S.monthRange(new Date(start.getFullYear(), m, 1));
@@ -167,7 +170,7 @@ const ReportSheet = (() => {
           if (i >= days.length) { put(ws, r, 2 + i, 1, "", { fill: MID }); continue; }
           const d = days[i], k = S.ymd(d), c = (log[k] || {})[h.id] || 0;
           total += c;
-          const before = h.created && k < h.created, future = d > upTo;
+          const before = h.created && k < h.created, future = d > upTo || (h.deadline && k > h.deadline);
           if (c > 0) put(ws, r, 2 + i, 1, c > 1 ? c : "✓", { fill: FREQ_HARD[h.freq], bold: true });
           else put(ws, r, 2 + i, 1, "", { fill: before || future ? "FFE5E7EB" : undefined });
         }
